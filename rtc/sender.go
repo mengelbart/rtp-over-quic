@@ -37,12 +37,26 @@ type Sender struct {
 }
 
 type SenderConfig struct {
-	Dump   bool
-	SCReAM bool
-	GCC    bool
+	Dump     bool
+	RTPDump  io.Writer
+	RTCPDump io.Writer
+	SCReAM   bool
+	GCC      bool
 }
 
-func screamLoopFactory(ctx context.Context, pipeline *gstsrc.Pipeline) scream.NewPeerConnectionCallback {
+type rateSetter interface {
+	SetBitRate(uint)
+}
+
+type rateController struct {
+	pipelines []rateSetter
+}
+
+func (c *rateController) addPipeline(p rateSetter) {
+	c.pipelines = append(c.pipelines, p)
+}
+
+func (c *rateController) screamLoopFactory(ctx context.Context) scream.NewPeerConnectionCallback {
 	return func(_ string, bwe scream.BandwidthEstimator) {
 		go func() {
 			ticker := time.NewTicker(200 * time.Millisecond)
@@ -58,15 +72,18 @@ func screamLoopFactory(ctx context.Context, pipeline *gstsrc.Pipeline) scream.Ne
 					if target < 0 {
 						log.Printf("got negative target bitrate: %v\n", target)
 					}
-					pipeline.SetBitRate(uint(target))
-					fmt.Printf("new bitrate: %v\n", target)
+					share := target / len(c.pipelines)
+					for _, p := range c.pipelines {
+						p.SetBitRate(uint(share))
+						fmt.Printf("new bitrate: %v\n", target)
+					}
 				}
 			}
 		}()
 	}
 }
 
-func gccLoopFactory(ctx context.Context, pipeline *gstsrc.Pipeline) gcc.NewPeerConnectionCallback {
+func (c *rateController) gccLoopFactory(ctx context.Context) gcc.NewPeerConnectionCallback {
 	return func(_ string, bwe gcc.BandwidthEstimator) {
 		go func() {
 			ticker := time.NewTicker(200 * time.Millisecond)
@@ -80,54 +97,56 @@ func gccLoopFactory(ctx context.Context, pipeline *gstsrc.Pipeline) gcc.NewPeerC
 						log.Printf("got negative target bitrate: %v\n", target)
 						continue
 					}
-					pipeline.SetBitRate(uint(target))
-					fmt.Printf("new bitrate: %v\n", target)
+					share := target / len(c.pipelines)
+					for _, p := range c.pipelines {
+						p.SetBitRate(uint(share))
+						fmt.Printf("new bitrate: %v\n", target)
+					}
 				}
 			}
 		}()
 	}
 }
 
-func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session quic.Session) SenderFactory {
+func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session quic.Session) (SenderFactory, error) {
+	ir := interceptor.Registry{}
+	if c.Dump {
+		if err := registerRTPSenderDumper(&ir, c.RTPDump, c.RTCPDump); err != nil {
+			return nil, err
+		}
+	}
+	var rc rateController
+	if c.SCReAM {
+		if err := registerSCReAM(&ir, rc.screamLoopFactory(ctx)); err != nil {
+			return nil, err
+		}
+	}
+	if c.GCC {
+		if err := registerGCC(&ir, rc.gccLoopFactory(ctx)); err != nil {
+			return nil, err
+		}
+		if err := registerTWCCHeaderExtension(&ir); err != nil {
+			return nil, err
+		}
+	}
+	interceptor, err := ir.Build("")
+	if err != nil {
+		return nil, err
+	}
 	return func() (*Sender, error) {
-		srcPipeline, err := gstsrc.NewPipeline("h264", "videotestsrc")
+		srcPipeline, err := gstSrcPipeline("h264", "videotestsrc", 0, 100_000)
 		if err != nil {
 			return nil, err
 		}
-		srcPipeline.SetSSRC(0)
-		srcPipeline.SetBitRate(100_000)
-		go srcPipeline.Start()
+		rc.addPipeline(srcPipeline)
 
-		ir := interceptor.Registry{}
-		if c.Dump {
-			if err = registerRTPSenderDumper(&ir); err != nil {
-				return nil, err
-			}
-		}
-		if c.SCReAM {
-			if err = registerSCReAM(&ir, screamLoopFactory(ctx, srcPipeline)); err != nil {
-				return nil, err
-			}
-		}
-		if c.GCC {
-			if err = registerGCC(&ir, gccLoopFactory(ctx, srcPipeline)); err != nil {
-				return nil, err
-			}
-			if err = registerTWCCHeaderExtension(&ir); err != nil {
-				return nil, err
-			}
-		}
-		interceptor, err := ir.Build("")
-		if err != nil {
-			return nil, err
-		}
 		sender, err := newSender(session, interceptor)
 		if err != nil {
 			return nil, err
 		}
 		sender.setFlow(0, srcPipeline)
 		return sender, nil
-	}
+	}, nil
 }
 
 func newSender(session quic.Session, interceptor interceptor.Interceptor) (*Sender, error) {

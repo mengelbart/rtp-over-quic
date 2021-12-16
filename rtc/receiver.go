@@ -27,15 +27,17 @@ type Receiver struct {
 }
 
 type ReceiverConfig struct {
-	Dump    bool
-	RFC8888 bool
-	TWCC    bool
+	Dump     bool
+	RTPDump  io.Writer
+	RTCPDump io.Writer
+	RFC8888  bool
+	TWCC     bool
 }
 
-func GstreamerReceiverFactory(c ReceiverConfig) ReceiverFactory {
+func GstreamerReceiverFactory(c ReceiverConfig) (ReceiverFactory, error) {
 	ir := interceptor.Registry{}
 	if c.Dump {
-		registerRTPReceiverDumper(&ir)
+		registerRTPReceiverDumper(&ir, c.RTPDump, c.RTCPDump)
 	}
 	if c.RFC8888 {
 		registerRFC8888(&ir)
@@ -43,13 +45,12 @@ func GstreamerReceiverFactory(c ReceiverConfig) ReceiverFactory {
 	if c.TWCC {
 		registerTWCC(&ir)
 	}
+	interceptor, err := ir.Build("")
+	if err != nil {
+		return nil, err
+	}
 	return func(session quic.Session) (*Receiver, error) {
-		dstPipeline, err := gstsink.NewPipeline("h264", "autovideosink")
-		if err != nil {
-			return nil, err
-		}
-		dstPipeline.Start()
-		interceptor, err := ir.Build("")
+		dstPipeline, err := gstDstPipeline("h264", "autovideosink")
 		if err != nil {
 			return nil, err
 		}
@@ -59,7 +60,7 @@ func GstreamerReceiverFactory(c ReceiverConfig) ReceiverFactory {
 		}
 		receiver.setFlow(0, dstPipeline)
 		return receiver, nil
-	}
+	}, nil
 }
 
 func newReceiver(session quic.Session, interceptor interceptor.Interceptor) (*Receiver, error) {
@@ -71,7 +72,7 @@ func newReceiver(session quic.Session, interceptor interceptor.Interceptor) (*Re
 	}, nil
 }
 
-func (r *Receiver) setFlow(id uint64, pipeline *gstsink.Pipeline) {
+func (r *Receiver) setFlow(id uint64, pipeline io.WriteCloser) {
 	streamReader := r.interceptor.BindRemoteStream(&interceptor.StreamInfo{
 		ID:                  "",
 		Attributes:          map[interface{}]interface{}{},

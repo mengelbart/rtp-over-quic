@@ -2,7 +2,6 @@ package rtc
 
 import (
 	"io"
-	"os"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/gcc/pkg/gcc"
@@ -11,10 +10,10 @@ import (
 	"github.com/pion/interceptor/scream/pkg/scream"
 )
 
-func registerRTPSenderDumper(r *interceptor.Registry) error {
+func registerRTPSenderDumper(r *interceptor.Registry, rtp, rtcp io.Writer) error {
 	rtpDumperInterceptor, err := packetdump.NewSenderInterceptor(
 		packetdump.RTPFormatter(rtpFormat),
-		packetdump.RTPWriter(os.Stdout),
+		packetdump.RTPWriter(rtp),
 	)
 	if err != nil {
 		return err
@@ -22,7 +21,7 @@ func registerRTPSenderDumper(r *interceptor.Registry) error {
 
 	rtcpDumperInterceptor, err := packetdump.NewReceiverInterceptor(
 		packetdump.RTCPFormatter(rtcpFormat),
-		packetdump.RTCPWriter(os.Stdout),
+		packetdump.RTCPWriter(rtcp),
 	)
 	if err != nil {
 		return err
@@ -32,10 +31,10 @@ func registerRTPSenderDumper(r *interceptor.Registry) error {
 	return nil
 }
 
-func registerRTPReceiverDumper(r *interceptor.Registry) error {
+func registerRTPReceiverDumper(r *interceptor.Registry, rtp, rtcp io.Writer) error {
 	rtcpDumperInterceptor, err := packetdump.NewSenderInterceptor(
 		packetdump.RTCPFormatter(rtcpFormat),
-		packetdump.RTCPWriter(io.Discard),
+		packetdump.RTCPWriter(rtcp),
 	)
 	if err != nil {
 		return err
@@ -43,7 +42,7 @@ func registerRTPReceiverDumper(r *interceptor.Registry) error {
 
 	rtpDumperInterceptor, err := packetdump.NewReceiverInterceptor(
 		packetdump.RTPFormatter(rtpFormat),
-		packetdump.RTPWriter(os.Stdout),
+		packetdump.RTPWriter(rtp),
 	)
 	if err != nil {
 		return err

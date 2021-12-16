@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -17,11 +18,13 @@ import (
 )
 
 var (
-	sendAddr string
-	dumpSent,
-	scream,
-	gcc,
-	sendStream bool
+	sendAddr       string
+	senderRTPDump  string
+	senderRTCPDump string
+	dumpSent       bool
+	scream         bool
+	gcc            bool
+	sendStream     bool
 )
 
 func init() {
@@ -31,6 +34,8 @@ func init() {
 
 	sendCmd.Flags().StringVarP(&sendAddr, "addr", "a", "localhost:4242", "QUIC server address")
 	sendCmd.Flags().BoolVarP(&dumpSent, "dump", "d", false, "Dump RTP and RTCP packets to stdout")
+	sendCmd.Flags().StringVar(&senderRTPDump, "rtp-dump", "log/rtp_out.log", "RTP dump file")
+	sendCmd.Flags().StringVar(&senderRTCPDump, "rtcp-dump", "log/rtcp_out.log", "RTCP dump file")
 	sendCmd.Flags().BoolVarP(&scream, "scream", "s", false, "Use SCReAM")
 	sendCmd.Flags().BoolVarP(&gcc, "gcc", "g", false, "Use Google Congestion Control")
 	sendCmd.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
@@ -50,9 +55,21 @@ func startSender() error {
 	defer cancel()
 
 	c := rtc.SenderConfig{
-		Dump:   dumpSent,
-		SCReAM: scream,
-		GCC:    gcc,
+		Dump:     dumpSent,
+		RTPDump:  io.Discard,
+		RTCPDump: io.Discard,
+		SCReAM:   scream,
+		GCC:      gcc,
+	}
+	if dumpSent {
+		rtpDumpFile, rtcpDumpFile, err := getDumpFiles(senderRTPDump, senderRTCPDump)
+		if err != nil {
+			return err
+		}
+		c.RTPDump = rtpDumpFile
+		c.RTCPDump = rtcpDumpFile
+		defer rtpDumpFile.Close()
+		defer rtcpDumpFile.Close()
 	}
 
 	session, err := connectQUIC(sendAddr)
@@ -60,7 +77,11 @@ func startSender() error {
 		return err
 	}
 
-	s, err := rtc.GstreamerSenderFactory(ctx, c, session)()
+	senderFactory, err := rtc.GstreamerSenderFactory(ctx, c, session)
+	if err != nil {
+		return err
+	}
+	s, err := senderFactory()
 	if err != nil {
 		return err
 	}
