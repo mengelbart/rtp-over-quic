@@ -4,8 +4,10 @@ go 1.17
 
 require (
 	github.com/lucas-clemente/quic-go v0.24.0
-	github.com/mengelbart/gst-go v0.0.0-20211215162049-24d71e0f441a
+	github.com/mengelbart/gst-go v0.0.0-20211216165356-08a819d18494
 	github.com/pion/interceptor v0.1.4
+	github.com/pion/interceptor/gcc v0.1.4
+	github.com/pion/interceptor/scream v0.1.4
 	github.com/pion/rtcp v1.2.9
 	github.com/pion/rtp v1.7.4
 	github.com/spf13/cobra v1.3.0
@@ -18,7 +20,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.4 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.0 // indirect
-	github.com/marten-seemann/qtls-go1-18 v0.1.0-beta.1 // indirect
+	github.com/mengelbart/scream-go v0.3.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
 	github.com/pion/logging v0.2.2 // indirect
@@ -33,8 +35,14 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-replace github.com/lucas-clemente/quic-go v0.24.0 => ../quic-go
+//replace github.com/lucas-clemente/quic-go v0.24.0 => ../quic-go
 
-//replace github.com/pion/interceptor v0.1.4 => github.com/pion/interceptor v0.1.5-0.20211215230245-b559316ff0ac
+replace github.com/pion/interceptor/gcc v0.1.4 => github.com/pion/interceptor v0.1.5-0.20211216120522-f271b1aadb4a
 
-replace github.com/pion/interceptor v0.1.4 => ../../pion/interceptor
+//replace github.com/pion/interceptor/gcc v0.1.4 => ../../pion/interceptor
+
+replace github.com/pion/interceptor/scream v0.1.4 => github.com/pion/interceptor v0.1.5-0.20211216120535-7fbe2f20ec69
+
+//replace github.com/pion/interceptor/scream v0.1.4 => ../../pion/interceptor
+
+//replace github.com/mengelbart/gst-go v0.0.0-20211216132332-b3fb253cbbda => ../gst-go

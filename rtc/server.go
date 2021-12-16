@@ -4,21 +4,23 @@ import (
 	"context"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/lucas-clemente/quic-go"
 )
 
-type receiverFactory func(quic.Session) (*Receiver, error)
+type ReceiverFactory func(quic.Session) (*Receiver, error)
 
 type Server struct {
 	wg           sync.WaitGroup
 	listener     quic.Listener
-	makeReceiver receiverFactory
+	makeReceiver ReceiverFactory
 }
 
-func NewServer(f receiverFactory, addr string) (*Server, error) {
+func NewServer(f ReceiverFactory, addr string) (*Server, error) {
 	quicConf := &quic.Config{
 		EnableDatagrams: true,
+		MaxIdleTimeout:  time.Second,
 	}
 
 	listener, err := quic.ListenAddr(addr, generateTLSConfig(), quicConf)
@@ -55,14 +57,13 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 			defer receiver.Close()
 			err := receiver.run(ctx)
 			if err != nil {
-				log.Printf("receiver crashed: %v\n", err)
+				log.Printf("receiver closed connection: %v\n", err)
 			}
 		}()
 	}
 }
 
 func (s *Server) Close() error {
-	err := s.listener.Close()
-	s.wg.Wait()
-	return err
+	defer s.wg.Wait()
+	return s.listener.Close()
 }

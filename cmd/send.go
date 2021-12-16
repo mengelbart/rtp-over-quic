@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -27,28 +28,23 @@ var sendCmd = &cobra.Command{
 }
 
 func startSender() error {
-	srcPipeline, err := gstsrc.NewPipeline("vp8", "videotestsrc")
-	if err != nil {
-		return err
-	}
-	s, err := rtc.NewSender(srcPipeline, addr)
-	if err != nil {
-		return err
-	}
-	srcPipeline.SetSSRC(0)
-	srcPipeline.SetBitRate(1_000_000)
-	go srcPipeline.Start()
-	defer func() {
-		srcPipeline.Stop()
-		srcPipeline.Destroy()
-	}()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	c := rtc.SenderConfig{
+		Dump:   false,
+		SCReAM: false,
+		GCC:    false,
+	}
+	s, err := rtc.GstreamerSenderFactory(ctx, c)(addr)
+	if err != nil {
+		return err
+	}
+
+	defer s.Close()
 	errCh := make(chan error)
 	go func() {
-		errCh <- s.Run(ctx)
+		errCh <- s.Run()
 	}()
 
 	sigs := make(chan os.Signal, 1)
@@ -56,6 +52,7 @@ func startSender() error {
 
 	select {
 	case err := <-errCh:
+		fmt.Println("Got error")
 		return err
 	case <-sigs:
 		return nil

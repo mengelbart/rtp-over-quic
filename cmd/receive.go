@@ -27,7 +27,12 @@ var receiveCmd = &cobra.Command{
 }
 
 func startReceiver() error {
-	server, err := rtc.NewServer(rtc.CreateGstreamerReceiver, addr)
+	c := rtc.ReceiverConfig{
+		Dump:    false,
+		RFC8888: false,
+		TWCC:    false,
+	}
+	server, err := rtc.NewServer(rtc.GstreamerReceiverFactory(c), addr)
 	if err != nil {
 		return err
 	}

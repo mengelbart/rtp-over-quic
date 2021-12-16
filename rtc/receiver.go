@@ -4,38 +4,63 @@ import (
 	"context"
 	"io"
 	"log"
-	"os"
+	"sync"
 
 	"github.com/lucas-clemente/quic-go"
 	gstsink "github.com/mengelbart/gst-go/gstreamer-sink"
 	"github.com/pion/interceptor"
-	"github.com/pion/interceptor/pkg/packetdump"
-	"github.com/pion/interceptor/pkg/twcc"
 	"github.com/pion/rtcp"
 )
 
 type Receiver struct {
-	session quic.Session
-	media   io.WriteCloser
+	session     quic.Session
+	media       io.WriteCloser
+	interceptor interceptor.Interceptor
+	wg          sync.WaitGroup
 }
 
-func CreateGstreamerReceiver(session quic.Session) (*Receiver, error) {
-	dstPipeline, err := gstsink.NewPipeline("vp8", "autovideosink")
-	if err != nil {
-		return nil, err
+type ReceiverConfig struct {
+	Dump    bool
+	RFC8888 bool
+	TWCC    bool
+}
+
+func GstreamerReceiverFactory(c ReceiverConfig) ReceiverFactory {
+	ir := interceptor.Registry{}
+	if c.Dump {
+		registerRTPReceiverDumper(&ir)
 	}
-	dstPipeline.Start()
-	return newReceiver(dstPipeline, session)
+	if c.RFC8888 {
+		registerRFC8888(&ir)
+	}
+	if c.TWCC {
+		registerTWCC(&ir)
+	}
+	return func(session quic.Session) (*Receiver, error) {
+		dstPipeline, err := gstsink.NewPipeline("h264", "autovideosink")
+		if err != nil {
+			return nil, err
+		}
+		dstPipeline.Start()
+		interceptor, err := ir.Build("")
+		if err != nil {
+			return nil, err
+		}
+		return newReceiver(dstPipeline, session, interceptor)
+	}
 }
 
-func newReceiver(media io.WriteCloser, session quic.Session) (*Receiver, error) {
+func newReceiver(media io.WriteCloser, session quic.Session, interceptor interceptor.Interceptor) (*Receiver, error) {
 	return &Receiver{
-		session: session,
-		media:   media,
+		session:     session,
+		media:       media,
+		interceptor: interceptor,
 	}, nil
 }
 
 func (r *Receiver) run(ctx context.Context) (err error) {
+	r.wg.Add(1)
+	defer r.wg.Done()
 	defer func() {
 		log.Println("closing receiver")
 		err1 := r.session.CloseWithError(0, "eos")
@@ -45,47 +70,7 @@ func (r *Receiver) run(ctx context.Context) (err error) {
 		err = err1
 	}()
 
-	//var rx *scream.ReceiverInterceptorFactory
-	//rx, err = scream.NewReceiverInterceptor()
-	//if err != nil {
-	//	return
-	//}
-
-	rtcpDumperInterceptor, err := packetdump.NewSenderInterceptor(
-		packetdump.RTCPFormatter(rtcpFormat),
-		packetdump.RTCPWriter(io.Discard),
-	)
-	if err != nil {
-		return
-	}
-
-	rtpDumperInterceptor, err := packetdump.NewReceiverInterceptor(
-		packetdump.RTPFormatter(rtpFormat),
-		packetdump.RTPWriter(os.Stdout),
-	)
-	if err != nil {
-		return
-	}
-
-	var fbFactory *twcc.SenderInterceptorFactory
-	fbFactory, err = twcc.NewSenderInterceptor()
-	if err != nil {
-		return
-	}
-
-	ir := interceptor.Registry{}
-	ir.Add(rtcpDumperInterceptor)
-	ir.Add(rtpDumperInterceptor)
-	ir.Add(fbFactory)
-	//ir.Add(rx)
-
-	var chain interceptor.Interceptor
-	chain, err = ir.Build("")
-	if err != nil {
-		return
-	}
-
-	streamReader := chain.BindRemoteStream(&interceptor.StreamInfo{
+	streamReader := r.interceptor.BindRemoteStream(&interceptor.StreamInfo{
 		ID:                  "",
 		Attributes:          map[interface{}]interface{}{},
 		SSRC:                0,
@@ -96,24 +81,11 @@ func (r *Receiver) run(ctx context.Context) (err error) {
 		Channels:            0,
 		SDPFmtpLine:         "",
 		RTCPFeedback:        []interceptor.RTCPFeedback{{Type: "ack", Parameter: "ccfb"}},
-	}, interceptor.RTPReaderFunc(func(b []byte, _ interceptor.Attributes) (int, interceptor.Attributes, error) {
-		n, err := r.media.Write(b)
-		if err != nil {
-			return n, nil, err
-		}
-		return len(b), nil, nil
-	}))
+	}, interceptor.RTPReaderFunc(r.rtpReader))
 
-	_ = chain.BindRTCPWriter(interceptor.RTCPWriterFunc(func(pkts []rtcp.Packet, _ interceptor.Attributes) (int, error) {
-		buf, err := rtcp.Marshal(pkts)
-		if err != nil {
-			return 0, err
-		}
-		return len(buf), r.session.SendMessage(buf, nil, nil)
-		//return len(buf), r.session.SendMessage(buf)
-	}))
+	_ = r.interceptor.BindRTCPWriter(interceptor.RTCPWriterFunc(r.rtcpWriter))
 
-	defer chain.Close()
+	defer r.interceptor.Close()
 
 	for {
 		select {
@@ -125,7 +97,7 @@ func (r *Receiver) run(ctx context.Context) (err error) {
 			if err != nil {
 				return
 			}
-			//log.Printf("%v bytes read from connection\n", len(buf))
+			log.Printf("%v bytes read from connection\n", len(buf))
 
 			if _, _, err := streamReader.Read(buf, nil); err != nil {
 				panic(err)
@@ -135,6 +107,24 @@ func (r *Receiver) run(ctx context.Context) (err error) {
 	}
 }
 
+func (r *Receiver) rtcpWriter(pkts []rtcp.Packet, _ interceptor.Attributes) (int, error) {
+	buf, err := rtcp.Marshal(pkts)
+	if err != nil {
+		return 0, err
+	}
+	//return len(buf), r.session.SendMessage(buf, nil, nil)
+	return len(buf), r.session.SendMessage(buf)
+}
+
+func (r *Receiver) rtpReader(b []byte, _ interceptor.Attributes) (int, interceptor.Attributes, error) {
+	n, err := r.media.Write(b)
+	if err != nil {
+		return n, nil, err
+	}
+	return len(b), nil, nil
+}
+
 func (r *Receiver) Close() error {
+	defer r.wg.Wait()
 	return r.media.Close()
 }
