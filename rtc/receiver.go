@@ -1,20 +1,27 @@
 package rtc
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log"
 	"sync"
 
 	"github.com/lucas-clemente/quic-go"
+	"github.com/lucas-clemente/quic-go/quicvarint"
 	gstsink "github.com/mengelbart/gst-go/gstreamer-sink"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
 )
 
+type receiveFlow struct {
+	media  io.WriteCloser
+	reader interceptor.RTPReader
+}
+
 type Receiver struct {
 	session     quic.Session
-	media       io.WriteCloser
+	flows       map[uint64]*receiveFlow
 	interceptor interceptor.Interceptor
 	wg          sync.WaitGroup
 }
@@ -46,16 +53,48 @@ func GstreamerReceiverFactory(c ReceiverConfig) ReceiverFactory {
 		if err != nil {
 			return nil, err
 		}
-		return newReceiver(dstPipeline, session, interceptor)
+		receiver, err := newReceiver(session, interceptor)
+		if err != nil {
+			return nil, err
+		}
+		receiver.setFlow(0, dstPipeline)
+		return receiver, nil
 	}
 }
 
-func newReceiver(media io.WriteCloser, session quic.Session, interceptor interceptor.Interceptor) (*Receiver, error) {
+func newReceiver(session quic.Session, interceptor interceptor.Interceptor) (*Receiver, error) {
 	return &Receiver{
 		session:     session,
-		media:       media,
+		flows:       map[uint64]*receiveFlow{},
 		interceptor: interceptor,
+		wg:          sync.WaitGroup{},
 	}, nil
+}
+
+func (r *Receiver) setFlow(id uint64, pipeline *gstsink.Pipeline) {
+	streamReader := r.interceptor.BindRemoteStream(&interceptor.StreamInfo{
+		ID:                  "",
+		Attributes:          map[interface{}]interface{}{},
+		SSRC:                0,
+		PayloadType:         0,
+		RTPHeaderExtensions: []interceptor.RTPHeaderExtension{{URI: transportCCURI, ID: 1}},
+		MimeType:            "",
+		ClockRate:           0,
+		Channels:            0,
+		SDPFmtpLine:         "",
+		RTCPFeedback:        []interceptor.RTCPFeedback{{Type: "ack", Parameter: "ccfb"}},
+	}, interceptor.RTPReaderFunc(func(b []byte, _ interceptor.Attributes) (int, interceptor.Attributes, error) {
+		n, err := pipeline.Write(b)
+		if err != nil {
+			return n, nil, err
+		}
+		return len(b), nil, nil
+	}))
+
+	r.flows[id] = &receiveFlow{
+		media:  pipeline,
+		reader: streamReader,
+	}
 }
 
 func (r *Receiver) run(ctx context.Context) (err error) {
@@ -70,19 +109,6 @@ func (r *Receiver) run(ctx context.Context) (err error) {
 		err = err1
 	}()
 
-	streamReader := r.interceptor.BindRemoteStream(&interceptor.StreamInfo{
-		ID:                  "",
-		Attributes:          map[interface{}]interface{}{},
-		SSRC:                0,
-		PayloadType:         0,
-		RTPHeaderExtensions: []interceptor.RTPHeaderExtension{{URI: transportCCURI, ID: 1}},
-		MimeType:            "",
-		ClockRate:           0,
-		Channels:            0,
-		SDPFmtpLine:         "",
-		RTCPFeedback:        []interceptor.RTCPFeedback{{Type: "ack", Parameter: "ccfb"}},
-	}, interceptor.RTPReaderFunc(r.rtpReader))
-
 	_ = r.interceptor.BindRTCPWriter(interceptor.RTCPWriterFunc(r.rtcpWriter))
 
 	defer r.interceptor.Close()
@@ -92,14 +118,26 @@ func (r *Receiver) run(ctx context.Context) (err error) {
 		case <-ctx.Done():
 			return
 		default:
-			var buf []byte
-			buf, err = r.session.ReceiveMessage()
+			buf, err := r.session.ReceiveMessage()
 			if err != nil {
-				return
+				return err
 			}
-			log.Printf("%v bytes read from connection\n", len(buf))
+			//log.Printf("%v bytes read from connection\n", len(buf))
 
-			if _, _, err := streamReader.Read(buf, nil); err != nil {
+			id, err := quicvarint.Read(bytes.NewReader(buf))
+			if err != nil {
+				log.Printf("failed to read flow ID: %v, dropping datagram\n", err)
+				continue
+			}
+			n := quicvarint.Len(id)
+			packet := buf[n:]
+			flow, ok := r.flows[id]
+			if !ok {
+				log.Printf("got datagram with unknown flow ID (%v), dropping datagram\n", id)
+				continue
+			}
+			//log.Printf("writing %v bytes to flow %v\n", len(packet), id)
+			if _, _, err := flow.reader.Read(packet, nil); err != nil {
 				panic(err)
 			}
 			//log.Printf("%v bytes written to pipeline\n", len(buf))
@@ -116,15 +154,12 @@ func (r *Receiver) rtcpWriter(pkts []rtcp.Packet, _ interceptor.Attributes) (int
 	return len(buf), r.session.SendMessage(buf)
 }
 
-func (r *Receiver) rtpReader(b []byte, _ interceptor.Attributes) (int, interceptor.Attributes, error) {
-	n, err := r.media.Write(b)
-	if err != nil {
-		return n, nil, err
-	}
-	return len(b), nil, nil
-}
-
 func (r *Receiver) Close() error {
 	defer r.wg.Wait()
-	return r.media.Close()
+	for _, flow := range r.flows {
+		if err := flow.media.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
