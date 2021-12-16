@@ -31,6 +31,8 @@ func startReceiver() error {
 	if err != nil {
 		return err
 	}
+	defer server.Close()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

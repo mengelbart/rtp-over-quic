@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -36,6 +35,8 @@ func startSender() error {
 	if err != nil {
 		return err
 	}
+	srcPipeline.SetSSRC(0)
+	srcPipeline.SetBitRate(1_000_000)
 	go srcPipeline.Start()
 	defer func() {
 		srcPipeline.Stop()
@@ -57,7 +58,6 @@ func startSender() error {
 	case err := <-errCh:
 		return err
 	case <-sigs:
-		fmt.Println("GOT SIGNAL")
 		return nil
 	}
 }

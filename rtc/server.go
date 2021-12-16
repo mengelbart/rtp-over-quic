@@ -3,6 +3,7 @@ package rtc
 import (
 	"context"
 	"log"
+	"sync"
 
 	"github.com/lucas-clemente/quic-go"
 )
@@ -10,6 +11,7 @@ import (
 type receiverFactory func(quic.Session) (*Receiver, error)
 
 type Server struct {
+	wg           sync.WaitGroup
 	listener     quic.Listener
 	makeReceiver receiverFactory
 }
@@ -25,19 +27,20 @@ func NewServer(f receiverFactory, addr string) (*Server, error) {
 	}
 
 	return &Server{
+		wg:           sync.WaitGroup{},
 		listener:     listener,
 		makeReceiver: f,
 	}, nil
 }
 
 func (s *Server) Listen(ctx context.Context) (err error) {
+	s.wg.Add(1)
+
 	defer func() {
-		err1 := s.listener.Close()
-		if err != nil {
-			return
-		}
-		err = err1
+		log.Println("closing server")
+		s.wg.Done()
 	}()
+
 	for {
 		session, err := s.listener.Accept(ctx)
 		if err != nil {
@@ -56,4 +59,10 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 			}
 		}()
 	}
+}
+
+func (s *Server) Close() error {
+	err := s.listener.Close()
+	s.wg.Wait()
+	return err
 }
