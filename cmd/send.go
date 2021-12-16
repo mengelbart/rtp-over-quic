@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -13,9 +12,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	dumpSent, scream, gcc bool
+)
+
 func init() {
 	go gstsrc.StartMainLoop()
+
 	rootCmd.AddCommand(sendCmd)
+
+	sendCmd.Flags().BoolVarP(&dumpSent, "dump", "d", false, "Dump RTP and RTCP packets to stdout")
+	sendCmd.Flags().BoolVarP(&scream, "scream", "s", false, "Use SCReAM")
+	sendCmd.Flags().BoolVarP(&gcc, "gcc", "g", false, "Use Google Congestion Control")
 }
 
 var sendCmd = &cobra.Command{
@@ -32,9 +40,9 @@ func startSender() error {
 	defer cancel()
 
 	c := rtc.SenderConfig{
-		Dump:   false,
-		SCReAM: false,
-		GCC:    false,
+		Dump:   dumpSent,
+		SCReAM: scream,
+		GCC:    gcc,
 	}
 	s, err := rtc.GstreamerSenderFactory(ctx, c)(addr)
 	if err != nil {
@@ -52,7 +60,6 @@ func startSender() error {
 
 	select {
 	case err := <-errCh:
-		fmt.Println("Got error")
 		return err
 	case <-sigs:
 		return nil
