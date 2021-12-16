@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	receiveAddr                 string
 	dumpReceived, rfc8888, twcc bool
 )
 
@@ -21,6 +22,7 @@ func init() {
 
 	rootCmd.AddCommand(receiveCmd)
 
+	receiveCmd.Flags().StringVarP(&receiveAddr, "addr", "a", "localhost:4242", "QUIC server address")
 	receiveCmd.Flags().BoolVarP(&dumpReceived, "dump", "d", false, "Dump RTP and RTCP packets to stdout")
 	receiveCmd.Flags().BoolVarP(&rfc8888, "rfc8888", "r", false, "Send RTCP Feedback for congestion control (RFC 8888)")
 	receiveCmd.Flags().BoolVarP(&twcc, "twcc", "t", false, "Send RTCP transport wide congestion control feedback")
@@ -41,7 +43,7 @@ func startReceiver() error {
 		RFC8888: rfc8888,
 		TWCC:    twcc,
 	}
-	server, err := rtc.NewServer(rtc.GstreamerReceiverFactory(c), addr)
+	server, err := rtc.NewServer(rtc.GstreamerReceiverFactory(c), receiveAddr)
 	if err != nil {
 		return err
 	}

@@ -3,7 +3,6 @@ package rtc
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -22,7 +21,7 @@ import (
 
 const transportCCURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
 
-type SenderFactory func(addr string) (*Sender, error)
+type SenderFactory func() (*Sender, error)
 
 type sendFlow struct {
 	media  io.ReadCloser
@@ -89,8 +88,8 @@ func gccLoopFactory(ctx context.Context, pipeline *gstsrc.Pipeline) gcc.NewPeerC
 	}
 }
 
-func GstreamerSenderFactory(ctx context.Context, c SenderConfig) SenderFactory {
-	return func(addr string) (*Sender, error) {
+func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session quic.Session) SenderFactory {
+	return func() (*Sender, error) {
 		srcPipeline, err := gstsrc.NewPipeline("h264", "videotestsrc")
 		if err != nil {
 			return nil, err
@@ -122,7 +121,7 @@ func GstreamerSenderFactory(ctx context.Context, c SenderConfig) SenderFactory {
 		if err != nil {
 			return nil, err
 		}
-		sender, err := newSender(addr, interceptor)
+		sender, err := newSender(session, interceptor)
 		if err != nil {
 			return nil, err
 		}
@@ -131,20 +130,7 @@ func GstreamerSenderFactory(ctx context.Context, c SenderConfig) SenderFactory {
 	}
 }
 
-func newSender(addr string, interceptor interceptor.Interceptor) (*Sender, error) {
-	tlsConf := &tls.Config{
-		InsecureSkipVerify: true,
-		NextProtos:         []string{"rtq"},
-	}
-	quicConf := &quic.Config{
-		MaxIdleTimeout:  time.Second,
-		EnableDatagrams: true,
-	}
-	session, err := quic.DialAddr(addr, tlsConf, quicConf)
-	if err != nil {
-		return nil, err
-	}
-
+func newSender(session quic.Session, interceptor interceptor.Interceptor) (*Sender, error) {
 	return &Sender{
 		session:     session,
 		flows:       map[uint64]*sendFlow{},

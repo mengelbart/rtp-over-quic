@@ -2,6 +2,7 @@ package rtc
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -48,6 +49,7 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 		if err != nil {
 			return err
 		}
+		go s.receiveStreamLoop(ctx, session)
 		receiver, err := s.makeReceiver(session)
 		if err != nil {
 			log.Printf("failed to create receiver: %v\n", err)
@@ -60,6 +62,23 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 				log.Printf("receiver closed connection: %v\n", err)
 			}
 		}()
+	}
+}
+
+func (s *Server) receiveStreamLoop(ctx context.Context, session quic.Session) error {
+	fmt.Println("Accept stream")
+	stream, err := session.AcceptUniStream(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Println("got stream")
+	buf := make([]byte, 1200)
+	for {
+		n, err := stream.Read(buf)
+		if err != nil {
+			return err
+		}
+		log.Printf("received %v stream bytes\n", n)
 	}
 }
 
