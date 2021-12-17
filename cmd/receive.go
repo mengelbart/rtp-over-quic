@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -17,6 +18,8 @@ var (
 	receiveAddr      string
 	receiverRTPDump  string
 	receiverRTCPDump string
+	receiverCodec    string
+	sink             string
 	dumpReceived     bool
 	rfc8888          bool
 	twcc             bool
@@ -27,7 +30,9 @@ func init() {
 
 	rootCmd.AddCommand(receiveCmd)
 
-	receiveCmd.Flags().StringVarP(&receiveAddr, "addr", "a", "localhost:4242", "QUIC server address")
+	receiveCmd.Flags().StringVarP(&receiveAddr, "addr", "a", ":4242", "QUIC server address")
+	receiveCmd.Flags().StringVarP(&receiverCodec, "codec", "c", "h264", "Media codec")
+	receiveCmd.Flags().StringVar(&sink, "sink", "autovideosink", "Media sink")
 	receiveCmd.Flags().BoolVarP(&dumpReceived, "dump", "d", false, "Dump RTP and RTCP packets to stdout")
 	receiveCmd.Flags().StringVar(&receiverRTPDump, "rtp-dump", "log/rtp_in.log", "RTP dump file")
 	receiveCmd.Flags().StringVar(&receiverRTCPDump, "rtcp-dump", "log/rtcp_in.log", "RTCP dump file")
@@ -78,7 +83,7 @@ func startReceiver() error {
 	if err != nil {
 		return err
 	}
-	server, err := rtc.NewServer(receiverFactory, receiveAddr)
+	server, err := rtc.NewServer(receiverFactory, receiveAddr, gstSinkFactory(receiverCodec, sink))
 	if err != nil {
 		return err
 	}
@@ -100,5 +105,31 @@ func startReceiver() error {
 		return err
 	case <-sigs:
 		return nil
+	}
+}
+
+func gstSinkFactory(codec string, dst string) rtc.MediaSinkFactory {
+	if dst != "autovideosink" {
+		dst = fmt.Sprintf("matroskamux ! filesink location=%v", dst)
+	}
+	return func() (rtc.MediaSink, error) {
+		dstPipeline, err := gstsink.NewPipeline(codec, dst)
+		if err != nil {
+			return nil, err
+		}
+		dstPipeline.Start()
+		return dstPipeline, nil
+	}
+}
+
+type nopCloser struct {
+	io.Writer
+}
+
+func (nopCloser) Close() error { return nil }
+
+func discardingSinkFactory() rtc.MediaSinkFactory {
+	return func() (rtc.MediaSink, error) {
+		return nopCloser{io.Discard}, nil
 	}
 }

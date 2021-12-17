@@ -21,6 +21,7 @@ require (
 	github.com/marten-seemann/qtls-go1-16 v0.1.4 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.0 // indirect
 	github.com/mengelbart/scream-go v0.3.0 // indirect
+	github.com/mengelbart/syncodec v0.0.0-20211121123228-d94cb52b9e9e
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
 	github.com/pion/logging v0.2.2 // indirect

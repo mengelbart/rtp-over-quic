@@ -10,15 +10,18 @@ import (
 	"github.com/lucas-clemente/quic-go"
 )
 
-type ReceiverFactory func(quic.Session) (*Receiver, error)
+type ReceiverFactory func(quic.Session, MediaSinkFactory) (*Receiver, error)
+
+type MediaSinkFactory func() (MediaSink, error)
 
 type Server struct {
 	wg           sync.WaitGroup
 	listener     quic.Listener
 	makeReceiver ReceiverFactory
+	sinkFactory  MediaSinkFactory
 }
 
-func NewServer(f ReceiverFactory, addr string) (*Server, error) {
+func NewServer(f ReceiverFactory, addr string, sinkFactory MediaSinkFactory) (*Server, error) {
 	quicConf := &quic.Config{
 		EnableDatagrams: true,
 		MaxIdleTimeout:  time.Second,
@@ -33,6 +36,7 @@ func NewServer(f ReceiverFactory, addr string) (*Server, error) {
 		wg:           sync.WaitGroup{},
 		listener:     listener,
 		makeReceiver: f,
+		sinkFactory:  sinkFactory,
 	}, nil
 }
 
@@ -50,7 +54,8 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 			return err
 		}
 		go s.receiveStreamLoop(ctx, session)
-		receiver, err := s.makeReceiver(session)
+
+		receiver, err := s.makeReceiver(session, s.sinkFactory)
 		if err != nil {
 			log.Printf("failed to create receiver: %v\n", err)
 			continue
@@ -67,6 +72,7 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 
 func (s *Server) receiveStreamLoop(ctx context.Context, session quic.Session) error {
 	fmt.Println("Accept stream")
+	defer fmt.Println("Exiting receive stream loop")
 	stream, err := session.AcceptUniStream(ctx)
 	if err != nil {
 		return err
@@ -83,6 +89,7 @@ func (s *Server) receiveStreamLoop(ctx context.Context, session quic.Session) er
 }
 
 func (s *Server) Close() error {
+	defer fmt.Println("Receiver closed")
 	defer s.wg.Wait()
 	return s.listener.Close()
 }

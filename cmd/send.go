@@ -14,6 +14,7 @@ import (
 	"github.com/lucas-clemente/quic-go"
 	gstsrc "github.com/mengelbart/gst-go/gstreamer-src"
 	"github.com/mengelbart/rtp-over-quic/rtc"
+	"github.com/mengelbart/syncodec"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,8 @@ var (
 	sendAddr       string
 	senderRTPDump  string
 	senderRTCPDump string
+	senderCodec    string
+	source         string
 	dumpSent       bool
 	scream         bool
 	gcc            bool
@@ -32,7 +35,9 @@ func init() {
 
 	rootCmd.AddCommand(sendCmd)
 
-	sendCmd.Flags().StringVarP(&sendAddr, "addr", "a", "localhost:4242", "QUIC server address")
+	sendCmd.Flags().StringVarP(&sendAddr, "addr", "a", ":4242", "QUIC server address")
+	sendCmd.Flags().StringVarP(&senderCodec, "codec", "c", "h264", "Media codec")
+	sendCmd.Flags().StringVar(&source, "source", "videotestsrc", "Media source")
 	sendCmd.Flags().BoolVarP(&dumpSent, "dump", "d", false, "Dump RTP and RTCP packets to stdout")
 	sendCmd.Flags().StringVar(&senderRTPDump, "rtp-dump", "log/rtp_out.log", "RTP dump file")
 	sendCmd.Flags().StringVar(&senderRTCPDump, "rtcp-dump", "log/rtcp_out.log", "RTCP dump file")
@@ -81,7 +86,12 @@ func startSender() error {
 	if err != nil {
 		return err
 	}
-	s, err := senderFactory()
+	src, err := gstSrcPipeline(senderCodec, source, 0, 100_000)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	s, err := senderFactory(src)
 	if err != nil {
 		return err
 	}
@@ -137,4 +147,51 @@ func streamSendLoop(session quic.Session) error {
 			return err
 		}
 	}
+}
+
+func gstSrcPipeline(codec string, src string, ssrc uint, initialBitrate uint) (*gstsrc.Pipeline, error) {
+	if src != "videotestsrc" {
+		src = fmt.Sprintf("filesrc location=%v ! queue ! decodebin ! videoconvert ", src)
+	}
+	srcPipeline, err := gstsrc.NewPipeline(codec, src)
+	if err != nil {
+		return nil, err
+	}
+	srcPipeline.SetSSRC(ssrc)
+	srcPipeline.SetBitRate(initialBitrate)
+	go srcPipeline.Start()
+	return srcPipeline, nil
+}
+
+type syntheticEncoder struct {
+	io.Reader
+	syncodec.Codec
+	writer io.Writer
+}
+
+func (e *syntheticEncoder) SetBitRate(target uint) {
+	e.SetTargetBitrate(int(target))
+}
+
+func (e *syntheticEncoder) WriteFrame(frame syncodec.Frame) {
+	e.writer.Write(frame.Content)
+}
+
+func (e *syntheticEncoder) Close() error {
+	return e.Codec.Close()
+}
+
+func syncodecPipeline(initialBitrate uint) (rtc.MediaSource, error) {
+	reader, writer := io.Pipe()
+	sw := &syntheticEncoder{
+		Reader: reader,
+		Codec:  nil,
+		writer: writer,
+	}
+	encoder, err := syncodec.NewStatisticalEncoder(sw, syncodec.WithInitialTargetBitrate(int(initialBitrate)))
+	if err != nil {
+		return nil, err
+	}
+	sw.Codec = encoder
+	return sw, nil
 }

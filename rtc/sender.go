@@ -12,7 +12,6 @@ import (
 
 	quic "github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/quicvarint"
-	gstsrc "github.com/mengelbart/gst-go/gstreamer-src"
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/gcc/pkg/gcc"
 	"github.com/pion/interceptor/scream/pkg/scream"
@@ -21,10 +20,15 @@ import (
 
 const transportCCURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
 
-type SenderFactory func() (*Sender, error)
+type SenderFactory func(MediaSource) (*Sender, error)
+
+type MediaSource interface {
+	io.Reader
+	SetBitRate(uint)
+}
 
 type sendFlow struct {
-	media  io.ReadCloser
+	media  io.Reader
 	writer interceptor.RTPWriter
 }
 
@@ -44,15 +48,11 @@ type SenderConfig struct {
 	GCC      bool
 }
 
-type rateSetter interface {
-	SetBitRate(uint)
-}
-
 type rateController struct {
-	pipelines []rateSetter
+	pipelines []MediaSource
 }
 
-func (c *rateController) addPipeline(p rateSetter) {
+func (c *rateController) addPipeline(p MediaSource) {
 	c.pipelines = append(c.pipelines, p)
 }
 
@@ -97,10 +97,13 @@ func (c *rateController) gccLoopFactory(ctx context.Context) gcc.NewPeerConnecti
 						log.Printf("got negative target bitrate: %v\n", target)
 						continue
 					}
+					fmt.Printf("new bitrate: %v\n", target)
+					if len(c.pipelines) == 0 {
+						continue
+					}
 					share := target / len(c.pipelines)
 					for _, p := range c.pipelines {
 						p.SetBitRate(uint(share))
-						fmt.Printf("new bitrate: %v\n", target)
 					}
 				}
 			}
@@ -133,18 +136,14 @@ func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session quic.Se
 	if err != nil {
 		return nil, err
 	}
-	return func() (*Sender, error) {
-		srcPipeline, err := gstSrcPipeline("h264", "videotestsrc", 0, 100_000)
-		if err != nil {
-			return nil, err
-		}
-		rc.addPipeline(srcPipeline)
+	return func(src MediaSource) (*Sender, error) {
+		rc.addPipeline(src)
 
 		sender, err := newSender(session, interceptor)
 		if err != nil {
 			return nil, err
 		}
-		sender.setFlow(0, srcPipeline)
+		sender.setFlow(0, src)
 		return sender, nil
 	}, nil
 }
@@ -159,7 +158,7 @@ func newSender(session quic.Session, interceptor interceptor.Interceptor) (*Send
 	}, nil
 }
 
-func (s *Sender) setFlow(id uint64, pipeline *gstsrc.Pipeline) {
+func (s *Sender) setFlow(id uint64, pipeline io.Reader) {
 	streamWriter := s.interceptor.BindLocalStream(&interceptor.StreamInfo{
 		ID:                  "",
 		Attributes:          map[interface{}]interface{}{},
@@ -294,9 +293,6 @@ func (s *Sender) Close() error {
 				panic(err)
 			}
 		}()
-		if err := flow.media.Close(); err != nil {
-			return err
-		}
 	}
 	s.close()
 	s.wg.Wait()

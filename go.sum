@@ -305,6 +305,8 @@ github.com/mengelbart/gst-go v0.0.0-20211216165356-08a819d18494 h1:V+xe4cRnwrB0G
 github.com/mengelbart/gst-go v0.0.0-20211216165356-08a819d18494/go.mod h1:J9js686VBdevB5wQODy0ZTDtUsMipxoSpedYVXsJ1vU=
 github.com/mengelbart/scream-go v0.3.0 h1:CKcbsQTzAxtLeDnlOvYdao4urU22M8QbqTxZwcmD0/Q=
 github.com/mengelbart/scream-go v0.3.0/go.mod h1:Yre6kUFLW62SKaIjBBZF/E93fEBqcCqn6bZyrjljd5k=
+github.com/mengelbart/syncodec v0.0.0-20211121123228-d94cb52b9e9e h1:whVLCvI8ythend7BkFQAtY8NwK7fdaCPoPEjykJdqxM=
+github.com/mengelbart/syncodec v0.0.0-20211121123228-d94cb52b9e9e/go.mod h1:xSNXCRAUe6VZ/3cIYLvelP33gCTh3PLVbckdgcCeV+U=
 github.com/microcosm-cc/bluemonday v1.0.1/go.mod h1:hsXNsILzKxV+sX77C5b8FSuKF00vh2OMYv+xgHpAMF4=
 github.com/miekg/dns v1.0.14/go.mod h1:W1PPwlIAgtquWBMBEV9nkV9Cazfe8ScdGz/Lj7v3Nrg=
 github.com/miekg/dns v1.1.26/go.mod h1:bPDLeHnStXmXAq1m/Ch/hvfNHr14JKNPMBo3VZKjuso=

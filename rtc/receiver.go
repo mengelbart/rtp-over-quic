@@ -3,16 +3,20 @@ package rtc
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"sync"
 
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/quicvarint"
-	gstsink "github.com/mengelbart/gst-go/gstreamer-sink"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
 )
+
+type MediaSink interface {
+	io.WriteCloser
+}
 
 type receiveFlow struct {
 	media  io.WriteCloser
@@ -49,8 +53,8 @@ func GstreamerReceiverFactory(c ReceiverConfig) (ReceiverFactory, error) {
 	if err != nil {
 		return nil, err
 	}
-	return func(session quic.Session) (*Receiver, error) {
-		dstPipeline, err := gstDstPipeline("h264", "autovideosink")
+	return func(session quic.Session, sinkFactory MediaSinkFactory) (*Receiver, error) {
+		sink, err := sinkFactory()
 		if err != nil {
 			return nil, err
 		}
@@ -58,7 +62,7 @@ func GstreamerReceiverFactory(c ReceiverConfig) (ReceiverFactory, error) {
 		if err != nil {
 			return nil, err
 		}
-		receiver.setFlow(0, dstPipeline)
+		receiver.setFlow(0, sink)
 		return receiver, nil
 	}, nil
 }
@@ -156,6 +160,7 @@ func (r *Receiver) rtcpWriter(pkts []rtcp.Packet, _ interceptor.Attributes) (int
 }
 
 func (r *Receiver) Close() error {
+	defer fmt.Println("Receiver closed")
 	defer r.wg.Wait()
 	for _, flow := range r.flows {
 		if err := flow.media.Close(); err != nil {
