@@ -2,12 +2,12 @@ package rtc
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/lucas-clemente/quic-go"
+	"github.com/lucas-clemente/quic-go/logging"
 )
 
 type ReceiverFactory func(quic.Session, MediaSinkFactory) (*Receiver, error)
@@ -21,10 +21,11 @@ type Server struct {
 	sinkFactory  MediaSinkFactory
 }
 
-func NewServer(f ReceiverFactory, addr string, sinkFactory MediaSinkFactory) (*Server, error) {
+func NewServer(f ReceiverFactory, addr string, sinkFactory MediaSinkFactory, tracer logging.Tracer) (*Server, error) {
 	quicConf := &quic.Config{
 		EnableDatagrams: true,
 		MaxIdleTimeout:  time.Second,
+		Tracer:          tracer,
 	}
 
 	listener, err := quic.ListenAddr(addr, generateTLSConfig(), quicConf)
@@ -61,6 +62,7 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 			continue
 		}
 		go func() {
+			log.Println("starting receiver")
 			defer receiver.Close()
 			err := receiver.run(ctx)
 			if err != nil {
@@ -71,13 +73,13 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 }
 
 func (s *Server) receiveStreamLoop(ctx context.Context, session quic.Session) error {
-	fmt.Println("Accept stream")
-	defer fmt.Println("Exiting receive stream loop")
+	log.Println("Accept stream")
+	defer log.Println("Exiting receive stream loop")
 	stream, err := session.AcceptUniStream(ctx)
 	if err != nil {
 		return err
 	}
-	fmt.Println("got stream")
+	log.Println("got stream")
 	buf := make([]byte, 1200)
 	for {
 		n, err := stream.Read(buf)
@@ -89,7 +91,7 @@ func (s *Server) receiveStreamLoop(ctx context.Context, session quic.Session) er
 }
 
 func (s *Server) Close() error {
-	defer fmt.Println("Receiver closed")
+	defer log.Println("Receiver closed")
 	defer s.wg.Wait()
 	return s.listener.Close()
 }

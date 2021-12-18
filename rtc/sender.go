@@ -41,9 +41,9 @@ type Sender struct {
 }
 
 type SenderConfig struct {
-	Dump     bool
 	RTPDump  io.Writer
 	RTCPDump io.Writer
+	CCDump   io.Writer
 	SCReAM   bool
 	GCC      bool
 }
@@ -56,7 +56,7 @@ func (c *rateController) addPipeline(p MediaSource) {
 	c.pipelines = append(c.pipelines, p)
 }
 
-func (c *rateController) screamLoopFactory(ctx context.Context) scream.NewPeerConnectionCallback {
+func (c *rateController) screamLoopFactory(ctx context.Context, file io.Writer) scream.NewPeerConnectionCallback {
 	return func(_ string, bwe scream.BandwidthEstimator) {
 		go func() {
 			ticker := time.NewTicker(200 * time.Millisecond)
@@ -64,18 +64,32 @@ func (c *rateController) screamLoopFactory(ctx context.Context) scream.NewPeerCo
 				select {
 				case <-ctx.Done():
 					return
-				case <-ticker.C:
+				case now := <-ticker.C:
 					target, err := bwe.GetTargetBitrate(0)
 					if err != nil {
 						log.Printf("failed to get target bitrate: %v\n", err)
 					}
+					stats := bwe.GetStats()
+					fmt.Fprintf(
+						file, "%v, %v, %v, %v, %v, %v, %v\n",
+						now.UnixMilli(),
+						target,
+						stats["queueDelay"],
+						stats["cwnd"],
+						stats["bytesInFlightLog"],
+						stats["rateLostStream0"],
+						stats["hiSeqAckStream0"],
+					)
+					if len(c.pipelines) == 0 {
+						continue
+					}
 					if target < 0 {
 						log.Printf("got negative target bitrate: %v\n", target)
+						continue
 					}
 					share := target / len(c.pipelines)
 					for _, p := range c.pipelines {
 						p.SetBitRate(uint(share))
-						fmt.Printf("new bitrate: %v\n", target)
 					}
 				}
 			}
@@ -83,7 +97,7 @@ func (c *rateController) screamLoopFactory(ctx context.Context) scream.NewPeerCo
 	}
 }
 
-func (c *rateController) gccLoopFactory(ctx context.Context) gcc.NewPeerConnectionCallback {
+func (c *rateController) gccLoopFactory(ctx context.Context, file io.Writer) gcc.NewPeerConnectionCallback {
 	return func(_ string, bwe gcc.BandwidthEstimator) {
 		go func() {
 			ticker := time.NewTicker(200 * time.Millisecond)
@@ -91,13 +105,13 @@ func (c *rateController) gccLoopFactory(ctx context.Context) gcc.NewPeerConnecti
 				select {
 				case <-ctx.Done():
 					return
-				case <-ticker.C:
+				case now := <-ticker.C:
 					target := bwe.GetTargetBitrate()
 					if target < 0 {
 						log.Printf("got negative target bitrate: %v\n", target)
 						continue
 					}
-					fmt.Printf("new bitrate: %v\n", target)
+					fmt.Fprintf(file, "%v, %v\n", now.UnixMilli(), target)
 					if len(c.pipelines) == 0 {
 						continue
 					}
@@ -113,19 +127,17 @@ func (c *rateController) gccLoopFactory(ctx context.Context) gcc.NewPeerConnecti
 
 func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session quic.Session) (SenderFactory, error) {
 	ir := interceptor.Registry{}
-	if c.Dump {
-		if err := registerRTPSenderDumper(&ir, c.RTPDump, c.RTCPDump); err != nil {
-			return nil, err
-		}
+	if err := registerRTPSenderDumper(&ir, c.RTPDump, c.RTCPDump); err != nil {
+		return nil, err
 	}
 	var rc rateController
 	if c.SCReAM {
-		if err := registerSCReAM(&ir, rc.screamLoopFactory(ctx)); err != nil {
+		if err := registerSCReAM(&ir, rc.screamLoopFactory(ctx, c.CCDump)); err != nil {
 			return nil, err
 		}
 	}
 	if c.GCC {
-		if err := registerGCC(&ir, rc.gccLoopFactory(ctx)); err != nil {
+		if err := registerGCC(&ir, rc.gccLoopFactory(ctx, c.CCDump)); err != nil {
 			return nil, err
 		}
 		if err := registerTWCCHeaderExtension(&ir); err != nil {
@@ -257,7 +269,7 @@ func (s *Sender) getRTPWriter(id uint64) interceptor.RTPWriter {
 		//if err := s.session.SendMessage(append(headerBuf, payload...), nil, nil); err != nil {
 		packetBuffer := append(headerBuf, payload...)
 		dgramBuffer := append(idBytes, packetBuffer...)
-		if err := s.session.SendMessage(dgramBuffer); err != nil {
+		if err := s.session.SendMessage(dgramBuffer, nil, nil); err != nil {
 			s.close()
 			if qerr, ok := err.(*quic.ApplicationError); ok && qerr.ErrorCode == 0 {
 				log.Printf("connection closed by remote")
@@ -288,11 +300,11 @@ func (s *Sender) isClosed() bool {
 
 func (s *Sender) Close() error {
 	for _, flow := range s.flows {
-		go func() {
-			if _, err := io.ReadAll(flow.media); err != nil {
+		go func(f *sendFlow) {
+			if _, err := io.ReadAll(f.media); err != nil {
 				panic(err)
 			}
-		}()
+		}(flow)
 	}
 	s.close()
 	s.wg.Wait()

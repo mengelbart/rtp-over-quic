@@ -19,8 +19,8 @@ var (
 	receiverRTPDump  string
 	receiverRTCPDump string
 	receiverCodec    string
+	receiverQLOGDir  string
 	sink             string
-	dumpReceived     bool
 	rfc8888          bool
 	twcc             bool
 )
@@ -33,9 +33,9 @@ func init() {
 	receiveCmd.Flags().StringVarP(&receiveAddr, "addr", "a", ":4242", "QUIC server address")
 	receiveCmd.Flags().StringVarP(&receiverCodec, "codec", "c", "h264", "Media codec")
 	receiveCmd.Flags().StringVar(&sink, "sink", "autovideosink", "Media sink")
-	receiveCmd.Flags().BoolVarP(&dumpReceived, "dump", "d", false, "Dump RTP and RTCP packets to stdout")
-	receiveCmd.Flags().StringVar(&receiverRTPDump, "rtp-dump", "log/rtp_in.log", "RTP dump file")
-	receiveCmd.Flags().StringVar(&receiverRTCPDump, "rtcp-dump", "log/rtcp_in.log", "RTCP dump file")
+	receiveCmd.Flags().StringVar(&receiverRTPDump, "rtp-dump", "", "RTP dump file")
+	receiveCmd.Flags().StringVar(&receiverRTCPDump, "rtcp-dump", "", "RTCP dump file")
+	receiveCmd.Flags().StringVar(&receiverQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
 	receiveCmd.Flags().BoolVarP(&rfc8888, "rfc8888", "r", false, "Send RTCP Feedback for congestion control (RFC 8888)")
 	receiveCmd.Flags().BoolVarP(&twcc, "twcc", "t", false, "Send RTCP transport wide congestion control feedback")
 }
@@ -49,41 +49,35 @@ var receiveCmd = &cobra.Command{
 	},
 }
 
-func getDumpFiles(rtpFile, rtcpFile string) (rtpDumpFile io.WriteCloser, rtcpDumpFile io.WriteCloser, err error) {
-	rtpDumpFile, err = os.Create(rtpFile)
-	if err != nil {
-		return
-	}
-	rtcpDumpFile, err = os.Create(rtcpFile)
-	if err != nil {
-		return
-	}
-	return
-}
-
 func startReceiver() error {
+	rtpDumpFile, err := getLogFile(receiverRTPDump)
+	if err != nil {
+		return err
+	}
+	defer rtpDumpFile.Close()
+
+	rtcpDumpfile, err := getLogFile(receiverRTCPDump)
+	if err != nil {
+		return err
+	}
+	defer rtcpDumpfile.Close()
+
 	c := rtc.ReceiverConfig{
-		Dump:     dumpReceived,
-		RTPDump:  io.Discard,
-		RTCPDump: io.Discard,
+		RTPDump:  rtpDumpFile,
+		RTCPDump: rtcpDumpfile,
 		RFC8888:  rfc8888,
 		TWCC:     twcc,
 	}
-	if dumpReceived {
-		rtpDumpFile, rtcpDumpfile, err := getDumpFiles(receiverRTPDump, receiverRTCPDump)
-		if err != nil {
-			return err
-		}
-		c.RTPDump = rtpDumpFile
-		c.RTCPDump = rtcpDumpfile
-		defer rtpDumpFile.Close()
-		defer rtcpDumpfile.Close()
-	}
+
 	receiverFactory, err := rtc.GstreamerReceiverFactory(c)
 	if err != nil {
 		return err
 	}
-	server, err := rtc.NewServer(receiverFactory, receiveAddr, gstSinkFactory(receiverCodec, sink))
+	tracer, err := getQLOGTracer(receiverQLOGDir)
+	if err != nil {
+		return err
+	}
+	server, err := rtc.NewServer(receiverFactory, receiveAddr, gstSinkFactory(receiverCodec, sink), tracer)
 	if err != nil {
 		return err
 	}
@@ -132,4 +126,18 @@ func discardingSinkFactory() rtc.MediaSinkFactory {
 	return func() (rtc.MediaSink, error) {
 		return nopCloser{io.Discard}, nil
 	}
+}
+
+func getLogFile(file string) (io.WriteCloser, error) {
+	if len(file) == 0 {
+		return nopCloser{io.Discard}, nil
+	}
+	if file == "stdout" {
+		return nopCloser{os.Stdout}, nil
+	}
+	fd, err := os.Create(file)
+	if err != nil {
+		return nil, err
+	}
+	return fd, nil
 }

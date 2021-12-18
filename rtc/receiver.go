@@ -3,7 +3,6 @@ package rtc
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"sync"
@@ -31,7 +30,6 @@ type Receiver struct {
 }
 
 type ReceiverConfig struct {
-	Dump     bool
 	RTPDump  io.Writer
 	RTCPDump io.Writer
 	RFC8888  bool
@@ -40,20 +38,24 @@ type ReceiverConfig struct {
 
 func GstreamerReceiverFactory(c ReceiverConfig) (ReceiverFactory, error) {
 	ir := interceptor.Registry{}
-	if c.Dump {
-		registerRTPReceiverDumper(&ir, c.RTPDump, c.RTCPDump)
-	}
-	if c.RFC8888 {
-		registerRFC8888(&ir)
-	}
-	if c.TWCC {
-		registerTWCC(&ir)
-	}
-	interceptor, err := ir.Build("")
-	if err != nil {
+	if err := registerRTPReceiverDumper(&ir, c.RTPDump, c.RTCPDump); err != nil {
 		return nil, err
 	}
+	if c.RFC8888 {
+		if err := registerRFC8888(&ir); err != nil {
+			return nil, err
+		}
+	}
+	if c.TWCC {
+		if err := registerTWCC(&ir); err != nil {
+			return nil, err
+		}
+	}
 	return func(session quic.Session, sinkFactory MediaSinkFactory) (*Receiver, error) {
+		interceptor, err := ir.Build("")
+		if err != nil {
+			return nil, err
+		}
 		sink, err := sinkFactory()
 		if err != nil {
 			return nil, err
@@ -156,11 +158,11 @@ func (r *Receiver) rtcpWriter(pkts []rtcp.Packet, _ interceptor.Attributes) (int
 		return 0, err
 	}
 	//return len(buf), r.session.SendMessage(buf, nil, nil)
-	return len(buf), r.session.SendMessage(buf)
+	return len(buf), r.session.SendMessage(buf, nil, nil)
 }
 
 func (r *Receiver) Close() error {
-	defer fmt.Println("Receiver closed")
+	defer log.Println("Receiver closed")
 	defer r.wg.Wait()
 	for _, flow := range r.flows {
 		if err := flow.media.Close(); err != nil {

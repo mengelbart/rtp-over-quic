@@ -8,10 +8,13 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/lucas-clemente/quic-go"
+	"github.com/lucas-clemente/quic-go/logging"
+	"github.com/lucas-clemente/quic-go/qlog"
 	gstsrc "github.com/mengelbart/gst-go/gstreamer-src"
 	"github.com/mengelbart/rtp-over-quic/rtc"
 	"github.com/mengelbart/syncodec"
@@ -24,7 +27,8 @@ var (
 	senderRTCPDump string
 	senderCodec    string
 	source         string
-	dumpSent       bool
+	ccDump         string
+	senderQLOGDir  string
 	scream         bool
 	gcc            bool
 	sendStream     bool
@@ -38,9 +42,10 @@ func init() {
 	sendCmd.Flags().StringVarP(&sendAddr, "addr", "a", ":4242", "QUIC server address")
 	sendCmd.Flags().StringVarP(&senderCodec, "codec", "c", "h264", "Media codec")
 	sendCmd.Flags().StringVar(&source, "source", "videotestsrc", "Media source")
-	sendCmd.Flags().BoolVarP(&dumpSent, "dump", "d", false, "Dump RTP and RTCP packets to stdout")
-	sendCmd.Flags().StringVar(&senderRTPDump, "rtp-dump", "log/rtp_out.log", "RTP dump file")
-	sendCmd.Flags().StringVar(&senderRTCPDump, "rtcp-dump", "log/rtcp_out.log", "RTCP dump file")
+	sendCmd.Flags().StringVar(&senderRTPDump, "rtp-dump", "", "RTP dump file, 'stdout' for Stdout")
+	sendCmd.Flags().StringVar(&senderRTCPDump, "rtcp-dump", "", "RTCP dump file, 'stdout' for Stdout")
+	sendCmd.Flags().StringVar(&ccDump, "cc-dump", "", "Congestion Control log file, use 'stdout' for Stdout")
+	sendCmd.Flags().StringVar(&senderQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
 	sendCmd.Flags().BoolVarP(&scream, "scream", "s", false, "Use SCReAM")
 	sendCmd.Flags().BoolVarP(&gcc, "gcc", "g", false, "Use Google Congestion Control")
 	sendCmd.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
@@ -59,25 +64,35 @@ func startSender() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	ccDumpFile, err := getLogFile(ccDump)
+	if err != nil {
+		return err
+	}
+	defer ccDumpFile.Close()
+	rtpDumpFile, err := getLogFile(senderRTPDump)
+	if err != nil {
+		return err
+	}
+	rtcpDumpFile, err := getLogFile(senderRTCPDump)
+	if err != nil {
+		return err
+	}
+	defer rtpDumpFile.Close()
+	defer rtcpDumpFile.Close()
+
 	c := rtc.SenderConfig{
-		Dump:     dumpSent,
-		RTPDump:  io.Discard,
-		RTCPDump: io.Discard,
+		RTPDump:  rtpDumpFile,
+		RTCPDump: rtcpDumpFile,
+		CCDump:   ccDumpFile,
 		SCReAM:   scream,
 		GCC:      gcc,
 	}
-	if dumpSent {
-		rtpDumpFile, rtcpDumpFile, err := getDumpFiles(senderRTPDump, senderRTCPDump)
-		if err != nil {
-			return err
-		}
-		c.RTPDump = rtpDumpFile
-		c.RTCPDump = rtcpDumpFile
-		defer rtpDumpFile.Close()
-		defer rtcpDumpFile.Close()
-	}
 
-	session, err := connectQUIC(sendAddr)
+	qlogWriter, err := getQLOGTracer(senderQLOGDir)
+	if err != nil {
+		return err
+	}
+	session, err := connectQUIC(sendAddr, qlogWriter)
 	if err != nil {
 		return err
 	}
@@ -117,7 +132,38 @@ func startSender() error {
 	}
 }
 
-func connectQUIC(addr string) (quic.Session, error) {
+func getQLOGTracer(path string) (logging.Tracer, error) {
+	if len(path) == 0 {
+		return nil, nil
+	}
+	if path == "stdout" {
+		return qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
+			return nopCloser{os.Stdout}
+		}), nil
+	}
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err = os.MkdirAll(path, 0o666); err != nil {
+				return nil, fmt.Errorf("failed to create qlog dir %s: %v", path, err)
+			}
+		} else {
+			return nil, err
+		}
+	}
+	return qlog.NewTracer(func(_ logging.Perspective, connectionID []byte) io.WriteCloser {
+		file := fmt.Sprintf("%s/%x.qlog", strings.TrimRight(path, "/"), connectionID)
+		w, err := os.Create(file)
+		if err != nil {
+			log.Printf("failed to create qlog file %s: %v", path, err)
+			return nil
+		}
+		log.Printf("created qlog file: %s\n", path)
+		return w
+	}), nil
+}
+
+func connectQUIC(addr string, tracer logging.Tracer) (quic.Session, error) {
 	tlsConf := &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"rtq"},
@@ -125,6 +171,7 @@ func connectQUIC(addr string) (quic.Session, error) {
 	quicConf := &quic.Config{
 		MaxIdleTimeout:  time.Second,
 		EnableDatagrams: true,
+		Tracer:          tracer,
 	}
 	session, err := quic.DialAddr(addr, tlsConf, quicConf)
 	if err != nil {
@@ -134,12 +181,12 @@ func connectQUIC(addr string) (quic.Session, error) {
 }
 
 func streamSendLoop(session quic.Session) error {
-	fmt.Println("Open stream")
+	log.Println("Open stream")
 	stream, err := session.OpenUniStream()
 	if err != nil {
 		return err
 	}
-	fmt.Println("Opened stream")
+	log.Println("Opened stream")
 	buf := make([]byte, 1200)
 	for {
 		_, err := stream.Write(buf)
