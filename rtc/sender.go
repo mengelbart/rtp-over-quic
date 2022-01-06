@@ -33,7 +33,7 @@ type sendFlow struct {
 }
 
 type Sender struct {
-	session     quic.Session
+	session     Transport
 	flows       map[uint64]*sendFlow
 	interceptor interceptor.Interceptor
 	done        chan struct{}
@@ -125,7 +125,7 @@ func (c *rateController) gccLoopFactory(ctx context.Context, file io.Writer) cc.
 	}
 }
 
-func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session quic.Session) (SenderFactory, error) {
+func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session Transport) (SenderFactory, error) {
 	ir := interceptor.Registry{}
 	if err := registerRTPSenderDumper(&ir, c.RTPDump, c.RTCPDump); err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session quic.Se
 	}, nil
 }
 
-func newSender(session quic.Session, interceptor interceptor.Interceptor) (*Sender, error) {
+func newSender(session Transport, interceptor interceptor.Interceptor) (*Sender, error) {
 	return &Sender{
 		session:     session,
 		flows:       map[uint64]*sendFlow{},
@@ -266,9 +266,12 @@ func (s *Sender) getRTPWriter(id uint64) interceptor.RTPWriter {
 			return 0, err
 		}
 
-		packetBuffer := append(headerBuf, payload...)
-		dgramBuffer := append(idBytes, packetBuffer...)
-		if err := s.session.SendMessage(dgramBuffer); err != nil {
+		buf := make([]byte, len(idBytes)+len(headerBuf)+len(payload))
+		copy(buf, idBytes)
+		copy(buf[len(idBytes):], headerBuf)
+		copy(buf[len(idBytes)+len(headerBuf):], payload)
+
+		if err := s.session.SendMessage(buf); err != nil {
 			s.close()
 			if qerr, ok := err.(*quic.ApplicationError); ok && qerr.ErrorCode == 0 {
 				log.Printf("connection closed by remote")
@@ -278,7 +281,7 @@ func (s *Sender) getRTPWriter(id uint64) interceptor.RTPWriter {
 			return 0, err
 		}
 		//log.Printf("%v bytes written to connection\n", len(dgramBuffer))
-		return len(packetBuffer), nil
+		return len(buf), nil
 	})
 }
 

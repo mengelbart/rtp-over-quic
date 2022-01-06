@@ -7,11 +7,16 @@ import (
 	"log"
 	"sync"
 
-	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/quicvarint"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
 )
+
+type Transport interface {
+	SendMessage([]byte) error
+	ReceiveMessage() ([]byte, error)
+	CloseWithError(int, string) error
+}
 
 type MediaSink interface {
 	io.WriteCloser
@@ -23,7 +28,7 @@ type receiveFlow struct {
 }
 
 type Receiver struct {
-	session     quic.Session
+	session     Transport
 	flows       map[uint64]*receiveFlow
 	interceptor interceptor.Interceptor
 	wg          sync.WaitGroup
@@ -51,7 +56,7 @@ func GstreamerReceiverFactory(c ReceiverConfig) (ReceiverFactory, error) {
 			return nil, err
 		}
 	}
-	return func(session quic.Session, sinkFactory MediaSinkFactory) (*Receiver, error) {
+	return func(session Transport, sinkFactory MediaSinkFactory) (*Receiver, error) {
 		interceptor, err := ir.Build("")
 		if err != nil {
 			return nil, err
@@ -69,7 +74,7 @@ func GstreamerReceiverFactory(c ReceiverConfig) (ReceiverFactory, error) {
 	}, nil
 }
 
-func newReceiver(session quic.Session, interceptor interceptor.Interceptor) (*Receiver, error) {
+func newReceiver(session Transport, interceptor interceptor.Interceptor) (*Receiver, error) {
 	return &Receiver{
 		session:     session,
 		flows:       map[uint64]*receiveFlow{},
@@ -95,6 +100,7 @@ func (r *Receiver) setFlow(id uint64, pipeline io.WriteCloser) {
 		if err != nil {
 			return n, nil, err
 		}
+		//log.Printf("%v bytes written to pipeline\n", n)
 		return len(b), nil, nil
 	}))
 

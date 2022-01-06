@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -22,6 +23,7 @@ import (
 )
 
 var (
+	sendTransport  string
 	sendAddr       string
 	senderRTPDump  string
 	senderRTCPDump string
@@ -39,6 +41,7 @@ func init() {
 
 	rootCmd.AddCommand(sendCmd)
 
+	sendCmd.Flags().StringVar(&sendTransport, "transport", "quic", "Transport protocol to use: quic or udp")
 	sendCmd.Flags().StringVarP(&sendAddr, "addr", "a", ":4242", "QUIC server address")
 	sendCmd.Flags().StringVarP(&senderCodec, "codec", "c", "h264", "Media codec")
 	sendCmd.Flags().StringVar(&source, "source", "videotestsrc", "Media source")
@@ -88,15 +91,36 @@ func startSender() error {
 		GCC:      gcc,
 	}
 
-	qlogWriter, err := getQLOGTracer(senderQLOGDir)
-	if err != nil {
-		return err
+	var transport rtc.Transport
+	switch sendTransport {
+	case "quic":
+		var qlogWriter logging.Tracer
+		qlogWriter, err = getQLOGTracer(senderQLOGDir)
+		if err != nil {
+			return err
+		}
+		var session quic.Session
+		session, err = connectQUIC(sendAddr, qlogWriter)
+		if err != nil {
+			return err
+		}
+		transport = &rtc.QUICTransport{
+			Session: session,
+		}
+		if sendStream {
+			go streamSendLoop(session)
+		}
+
+	case "udp":
+		transport, err = connectUDP(sendAddr)
+		if err != nil {
+			return err
+		}
+
+	default:
+		return fmt.Errorf("unknown transport protocol: %v", sendTransport)
 	}
-	session, err := connectQUIC(sendAddr, qlogWriter)
-	if err != nil {
-		return err
-	}
-	senderFactory, err := rtc.GstreamerSenderFactory(ctx, c, session)
+	senderFactory, err := rtc.GstreamerSenderFactory(ctx, c, transport)
 	if err != nil {
 		return err
 	}
@@ -127,10 +151,6 @@ func startSender() error {
 	go func() {
 		errCh <- s.Run()
 	}()
-
-	if sendStream {
-		go streamSendLoop(session)
-	}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -253,4 +273,37 @@ func syncodecPipeline(initialBitrate uint) (rtc.MediaSource, error) {
 	sw.Codec = encoder
 	go sw.Start()
 	return sw, nil
+}
+
+func connectUDP(addr string) (*udpClient, error) {
+	a, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := net.DialUDP("udp", nil, a)
+	if err != nil {
+		return nil, err
+	}
+	return &udpClient{
+		conn: conn,
+	}, nil
+}
+
+type udpClient struct {
+	conn *net.UDPConn
+}
+
+func (c *udpClient) SendMessage(msg []byte) error {
+	_, err := c.conn.Write(msg)
+	return err
+}
+
+func (c *udpClient) ReceiveMessage() ([]byte, error) {
+	buf := make([]byte, 1400)
+	n, err := c.conn.Read(buf)
+	return buf[:n], err
+}
+
+func (c *udpClient) CloseWithError(int, string) error {
+	return c.conn.Close()
 }

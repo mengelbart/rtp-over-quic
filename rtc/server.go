@@ -10,7 +10,7 @@ import (
 	"github.com/lucas-clemente/quic-go/logging"
 )
 
-type ReceiverFactory func(quic.Session, MediaSinkFactory) (*Receiver, error)
+type ReceiverFactory func(Transport, MediaSinkFactory) (*Receiver, error)
 
 type MediaSinkFactory func() (MediaSink, error)
 
@@ -56,7 +56,7 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 		}
 		go s.receiveStreamLoop(ctx, session)
 
-		receiver, err := s.makeReceiver(session, s.sinkFactory)
+		receiver, err := s.makeReceiver(&QUICTransport{session}, s.sinkFactory)
 		if err != nil {
 			log.Printf("failed to create receiver: %v\n", err)
 			continue
@@ -70,6 +70,14 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 			}
 		}()
 	}
+}
+
+type QUICTransport struct {
+	quic.Session
+}
+
+func (t *QUICTransport) CloseWithError(code int, msg string) error {
+	return t.Session.CloseWithError(quic.ApplicationErrorCode(code), msg)
 }
 
 func (s *Server) receiveStreamLoop(ctx context.Context, session quic.Session) error {

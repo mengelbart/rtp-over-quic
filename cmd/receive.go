@@ -15,6 +15,7 @@ import (
 )
 
 var (
+	receiveTransport string
 	receiveAddr      string
 	receiverRTPDump  string
 	receiverRTCPDump string
@@ -30,6 +31,7 @@ func init() {
 
 	rootCmd.AddCommand(receiveCmd)
 
+	receiveCmd.Flags().StringVar(&receiveTransport, "transport", "quic", "Transport protocol to use")
 	receiveCmd.Flags().StringVarP(&receiveAddr, "addr", "a", ":4242", "QUIC server address")
 	receiveCmd.Flags().StringVarP(&receiverCodec, "codec", "c", "h264", "Media codec")
 	receiveCmd.Flags().StringVar(&sink, "sink", "autovideosink", "Media sink")
@@ -85,19 +87,36 @@ func startReceiver() error {
 		mediaSink = gstSinkFactory(receiverCodec, sink)
 	}
 
-	server, err := rtc.NewServer(receiverFactory, receiveAddr, mediaSink, tracer)
-	if err != nil {
-		return err
-	}
-	defer server.Close()
-
+	errCh := make(chan error)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	errCh := make(chan error)
-	go func() {
-		errCh <- server.Listen(ctx)
-	}()
+	switch receiveTransport {
+	case "quic":
+		server, err := rtc.NewServer(receiverFactory, receiveAddr, mediaSink, tracer)
+		if err != nil {
+			return err
+		}
+		defer server.Close()
+
+		go func() {
+			errCh <- server.Listen(ctx)
+		}()
+
+	case "udp":
+		server, err := rtc.NewUDPServer(receiverFactory, receiveAddr, mediaSink)
+		if err != nil {
+			return err
+		}
+
+		defer server.Close()
+
+		go func() {
+			errCh <- server.Listen(ctx)
+		}()
+	default:
+		return fmt.Errorf("unknown transport protocol: %v", receiveTransport)
+	}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
