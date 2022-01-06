@@ -5,8 +5,7 @@ go 1.17
 require (
 	github.com/lucas-clemente/quic-go v0.24.0
 	github.com/mengelbart/gst-go v0.0.0-20211216165356-08a819d18494
-	github.com/pion/interceptor v0.1.4
-	github.com/pion/interceptor/gcc v0.1.4
+	github.com/pion/interceptor v0.1.5-0.20220105143926-4067bef17709
 	github.com/pion/interceptor/scream v0.1.4
 	github.com/pion/rtcp v1.2.9
 	github.com/pion/rtp v1.7.4
@@ -39,9 +38,5 @@ require (
 )
 
 replace github.com/lucas-clemente/quic-go v0.24.0 => github.com/mengelbart/quic-go v0.7.1-0.20220106093653-440c23ccbc40
-
-//replace github.com/lucas-clemente/quic-go v0.24.0 => ../quic-go
-
-replace github.com/pion/interceptor/gcc v0.1.4 => github.com/pion/interceptor v0.1.5-0.20211217173034-8b9cce25c5f7
 
 replace github.com/pion/interceptor/scream v0.1.4 => github.com/pion/interceptor v0.1.5-0.20211218140245-111734e7ca1e

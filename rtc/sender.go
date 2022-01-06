@@ -13,7 +13,7 @@ import (
 	quic "github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/quicvarint"
 	"github.com/pion/interceptor"
-	"github.com/pion/interceptor/gcc/pkg/gcc"
+	"github.com/pion/interceptor/pkg/cc"
 	"github.com/pion/interceptor/scream/pkg/scream"
 	"github.com/pion/rtp"
 )
@@ -97,8 +97,8 @@ func (c *rateController) screamLoopFactory(ctx context.Context, file io.Writer) 
 	}
 }
 
-func (c *rateController) gccLoopFactory(ctx context.Context, file io.Writer) gcc.NewPeerConnectionCallback {
-	return func(_ string, bwe gcc.BandwidthEstimator) {
+func (c *rateController) gccLoopFactory(ctx context.Context, file io.Writer) cc.NewPeerConnectionCallback {
+	return func(_ string, bwe cc.BandwidthEstimator) {
 		go func() {
 			ticker := time.NewTicker(200 * time.Millisecond)
 			for {

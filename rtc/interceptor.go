@@ -4,9 +4,10 @@ import (
 	"io"
 
 	"github.com/pion/interceptor"
-	"github.com/pion/interceptor/gcc/pkg/gcc"
-	"github.com/pion/interceptor/gcc/pkg/twcc"
+	"github.com/pion/interceptor/pkg/cc"
+	"github.com/pion/interceptor/pkg/gcc"
 	"github.com/pion/interceptor/pkg/packetdump"
+	"github.com/pion/interceptor/pkg/twcc"
 	"github.com/pion/interceptor/scream/pkg/scream"
 )
 
@@ -70,8 +71,11 @@ func registerTWCCHeaderExtension(r *interceptor.Registry) error {
 	return nil
 }
 
-func registerGCC(r *interceptor.Registry, cb gcc.NewPeerConnectionCallback) error {
-	gccFactory, err := gcc.NewInterceptor(gcc.InitialBitrate(100_000), gcc.SetPacer(gcc.NewLeakyBucketPacer(100_000)))
+func registerGCC(r *interceptor.Registry, cb cc.NewPeerConnectionCallback) error {
+	fx := func() (cc.BandwidthEstimator, error) {
+		return gcc.NewSendSideBWE(gcc.SendSideBWEInitialBitrate(100_000), gcc.SendSideBWEPacer(gcc.NewLeakyBucketPacer(100_000)))
+	}
+	gccFactory, err := cc.NewInterceptor(fx)
 	if err != nil {
 		return err
 	}
