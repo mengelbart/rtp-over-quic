@@ -271,7 +271,7 @@ func (s *Sender) getRTPWriter(id uint64) interceptor.RTPWriter {
 		copy(buf[len(idBytes):], headerBuf)
 		copy(buf[len(idBytes)+len(headerBuf):], payload)
 
-		if err := s.session.SendMessage(buf); err != nil {
+		if err := s.session.SendMessage(buf, nil, nil); err != nil {
 			s.close()
 			if qerr, ok := err.(*quic.ApplicationError); ok && qerr.ErrorCode == 0 {
 				log.Printf("connection closed by remote")

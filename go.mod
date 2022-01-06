@@ -20,7 +20,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.4 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.0 // indirect
-	github.com/marten-seemann/qtls-go1-18 v0.1.0-beta.1 // indirect
 	github.com/mengelbart/scream-go v0.3.0 // indirect
 	github.com/mengelbart/syncodec v0.0.0-20211121123228-d94cb52b9e9e
 	github.com/nxadm/tail v1.4.8 // indirect
@@ -37,6 +36,8 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-replace github.com/lucas-clemente/quic-go v0.24.0 => github.com/mengelbart/quic-go v0.7.1-0.20220106093653-440c23ccbc40
+replace github.com/lucas-clemente/quic-go v0.24.0 => github.com/mengelbart/quic-go v0.7.1-0.20220106181114-eb383af33fad
+
+//replace github.com/lucas-clemente/quic-go v0.24.0 => ../quic-go
 
 replace github.com/pion/interceptor/scream v0.1.4 => github.com/pion/interceptor v0.1.5-0.20211218140245-111734e7ca1e

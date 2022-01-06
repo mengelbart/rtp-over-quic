@@ -288,7 +288,6 @@ github.com/marten-seemann/qtls-go1-16 v0.1.4 h1:xbHbOGGhrenVtII6Co8akhLEdrawwB2i
 github.com/marten-seemann/qtls-go1-16 v0.1.4/go.mod h1:gNpI2Ol+lRS3WwSOtIUUtRwZEQMXjYK+dQSBFbethAk=
 github.com/marten-seemann/qtls-go1-17 v0.1.0 h1:P9ggrs5xtwiqXv/FHNwntmuLMNq3KaSIG93AtAZ48xk=
 github.com/marten-seemann/qtls-go1-17 v0.1.0/go.mod h1:fz4HIxByo+LlWcreM4CZOYNuz3taBQ8rN2X6FqvaWo8=
-github.com/marten-seemann/qtls-go1-18 v0.1.0-beta.1 h1:EnzzN9fPUkUck/1CuY1FlzBaIYMoiBsdwTNmNGkwUUM=
 github.com/marten-seemann/qtls-go1-18 v0.1.0-beta.1/go.mod h1:PUhIQk19LoFt2174H4+an8TYvWOGjb/hHwphBeaDHwI=
 github.com/mattn/go-colorable v0.0.9/go.mod h1:9vuHe8Xs5qXnSaW/c/ABM9alt+Vo+STaOChaDxuIBZU=
 github.com/mattn/go-colorable v0.1.4/go.mod h1:U0ppj6V5qS13XJ6of8GYAs25YV2eR4EVcfRqFIhoBtE=
@@ -304,8 +303,8 @@ github.com/mattn/go-isatty v0.0.14/go.mod h1:7GGIvUiUoEMVVmxf/4nioHXj79iQHKdU27k
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
 github.com/mengelbart/gst-go v0.0.0-20211216165356-08a819d18494 h1:V+xe4cRnwrB0GjaCagWrPVTkf1IINLGdv1aPz9HSYcs=
 github.com/mengelbart/gst-go v0.0.0-20211216165356-08a819d18494/go.mod h1:J9js686VBdevB5wQODy0ZTDtUsMipxoSpedYVXsJ1vU=
-github.com/mengelbart/quic-go v0.7.1-0.20220106093653-440c23ccbc40 h1:qxCW178XdOIYDyeFJcpIQs1tGoFzckjZHGeVIKMyRjM=
-github.com/mengelbart/quic-go v0.7.1-0.20220106093653-440c23ccbc40/go.mod h1:YtzP8bxRVCBlO77yRanE264+fY/T2U9ZlW1AaHOsMOg=
+github.com/mengelbart/quic-go v0.7.1-0.20220106181114-eb383af33fad h1:yVXO1lCOQlGrO8fmEuEWB4SFB/fjhZHMftY8mIyFnH4=
+github.com/mengelbart/quic-go v0.7.1-0.20220106181114-eb383af33fad/go.mod h1:YtzP8bxRVCBlO77yRanE264+fY/T2U9ZlW1AaHOsMOg=
 github.com/mengelbart/scream-go v0.3.0 h1:CKcbsQTzAxtLeDnlOvYdao4urU22M8QbqTxZwcmD0/Q=
 github.com/mengelbart/scream-go v0.3.0/go.mod h1:Yre6kUFLW62SKaIjBBZF/E93fEBqcCqn6bZyrjljd5k=
 github.com/mengelbart/syncodec v0.0.0-20211121123228-d94cb52b9e9e h1:whVLCvI8ythend7BkFQAtY8NwK7fdaCPoPEjykJdqxM=

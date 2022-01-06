@@ -33,6 +33,7 @@ var (
 	senderQLOGDir  string
 	scream         bool
 	gcc            bool
+	newReno        bool
 	sendStream     bool
 )
 
@@ -51,6 +52,7 @@ func init() {
 	sendCmd.Flags().StringVar(&senderQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
 	sendCmd.Flags().BoolVarP(&scream, "scream", "s", false, "Use SCReAM")
 	sendCmd.Flags().BoolVarP(&gcc, "gcc", "g", false, "Use Google Congestion Control")
+	sendCmd.Flags().BoolVarP(&newReno, "newreno", "n", false, "Enable NewReno Congestion Control")
 	sendCmd.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
 }
 
@@ -64,6 +66,7 @@ var sendCmd = &cobra.Command{
 }
 
 func startSender() error {
+	fmt.Printf("newReno: %v\n", newReno)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -100,7 +103,7 @@ func startSender() error {
 			return err
 		}
 		var session quic.Session
-		session, err = connectQUIC(sendAddr, qlogWriter)
+		session, err = connectQUIC(qlogWriter)
 		if err != nil {
 			return err
 		}
@@ -112,7 +115,7 @@ func startSender() error {
 		}
 
 	case "udp":
-		transport, err = connectUDP(sendAddr)
+		transport, err = connectUDP()
 		if err != nil {
 			return err
 		}
@@ -194,7 +197,7 @@ func getQLOGTracer(path string) (logging.Tracer, error) {
 	}), nil
 }
 
-func connectQUIC(addr string, tracer logging.Tracer) (quic.Session, error) {
+func connectQUIC(tracer logging.Tracer) (quic.Session, error) {
 	tlsConf := &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"rtq"},
@@ -203,8 +206,9 @@ func connectQUIC(addr string, tracer logging.Tracer) (quic.Session, error) {
 		MaxIdleTimeout:  time.Second,
 		EnableDatagrams: true,
 		Tracer:          tracer,
+		DisableCC:       !newReno,
 	}
-	session, err := quic.DialAddr(addr, tlsConf, quicConf)
+	session, err := quic.DialAddr(sendAddr, tlsConf, quicConf)
 	if err != nil {
 		return nil, err
 	}
@@ -275,8 +279,8 @@ func syncodecPipeline(initialBitrate uint) (rtc.MediaSource, error) {
 	return sw, nil
 }
 
-func connectUDP(addr string) (*udpClient, error) {
-	a, err := net.ResolveUDPAddr("udp", addr)
+func connectUDP() (*udpClient, error) {
+	a, err := net.ResolveUDPAddr("udp", sendAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +297,7 @@ type udpClient struct {
 	conn *net.UDPConn
 }
 
-func (c *udpClient) SendMessage(msg []byte) error {
+func (c *udpClient) SendMessage(msg []byte, _ func(error), _ func(bool)) error {
 	_, err := c.conn.Write(msg)
 	return err
 }

@@ -88,7 +88,7 @@ func (t *udpTransport) ReceiveMessage() ([]byte, error) {
 	}
 }
 
-func (t *udpTransport) SendMessage(msg []byte) error {
+func (t *udpTransport) SendMessage(msg []byte, _ func(error), _ func(bool)) error {
 	_, err := t.conn.WriteTo(msg, t.addr)
 	return err
 }

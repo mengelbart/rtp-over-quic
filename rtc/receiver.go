@@ -13,7 +13,7 @@ import (
 )
 
 type Transport interface {
-	SendMessage([]byte) error
+	SendMessage([]byte, func(error), func(bool)) error
 	ReceiveMessage() ([]byte, error)
 	CloseWithError(int, string) error
 }
@@ -163,7 +163,7 @@ func (r *Receiver) rtcpWriter(pkts []rtcp.Packet, _ interceptor.Attributes) (int
 	if err != nil {
 		return 0, err
 	}
-	return len(buf), r.session.SendMessage(buf)
+	return len(buf), r.session.SendMessage(buf, nil, nil)
 }
 
 func (r *Receiver) Close() error {
