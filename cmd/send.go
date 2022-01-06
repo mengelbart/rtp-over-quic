@@ -35,6 +35,7 @@ var (
 	gcc            bool
 	newReno        bool
 	sendStream     bool
+	localRFC8888   bool
 )
 
 func init() {
@@ -51,6 +52,7 @@ func init() {
 	sendCmd.Flags().StringVar(&ccDump, "cc-dump", "", "Congestion Control log file, use 'stdout' for Stdout")
 	sendCmd.Flags().StringVar(&senderQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
 	sendCmd.Flags().BoolVarP(&scream, "scream", "s", false, "Use SCReAM")
+	sendCmd.Flags().BoolVar(&localRFC8888, "local-rfc8888", false, "Generate local RFC 8888 feedback")
 	sendCmd.Flags().BoolVarP(&gcc, "gcc", "g", false, "Use Google Congestion Control")
 	sendCmd.Flags().BoolVarP(&newReno, "newreno", "n", false, "Enable NewReno Congestion Control")
 	sendCmd.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
@@ -66,7 +68,6 @@ var sendCmd = &cobra.Command{
 }
 
 func startSender() error {
-	fmt.Printf("newReno: %v\n", newReno)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -87,11 +88,12 @@ func startSender() error {
 	defer rtcpDumpFile.Close()
 
 	c := rtc.SenderConfig{
-		RTPDump:  rtpDumpFile,
-		RTCPDump: rtcpDumpFile,
-		CCDump:   ccDumpFile,
-		SCReAM:   scream,
-		GCC:      gcc,
+		RTPDump:      rtpDumpFile,
+		RTCPDump:     rtcpDumpFile,
+		CCDump:       ccDumpFile,
+		SCReAM:       scream,
+		GCC:          gcc,
+		LocalRFC8888: localRFC8888,
 	}
 
 	var transport rtc.Transport
@@ -103,12 +105,14 @@ func startSender() error {
 			return err
 		}
 		var session quic.Session
-		session, err = connectQUIC(qlogWriter)
+		var tracer *rtc.RTTTracer
+		session, tracer, err = connectQUIC(qlogWriter)
 		if err != nil {
 			return err
 		}
 		transport = &rtc.QUICTransport{
-			Session: session,
+			RTTTracer: tracer,
+			Session:   session,
 		}
 		if sendStream {
 			go streamSendLoop(session)
@@ -197,11 +201,17 @@ func getQLOGTracer(path string) (logging.Tracer, error) {
 	}), nil
 }
 
-func connectQUIC(tracer logging.Tracer) (quic.Session, error) {
+func connectQUIC(qlogger logging.Tracer) (quic.Session, *rtc.RTTTracer, error) {
 	tlsConf := &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"rtq"},
 	}
+	metricsTracer := rtc.NewTracer()
+	tracers := []logging.Tracer{metricsTracer}
+	if qlogger != nil {
+		tracers = append(tracers, qlogger)
+	}
+	tracer := logging.NewMultiplexedTracer(tracers...)
 	quicConf := &quic.Config{
 		MaxIdleTimeout:  time.Second,
 		EnableDatagrams: true,
@@ -210,9 +220,9 @@ func connectQUIC(tracer logging.Tracer) (quic.Session, error) {
 	}
 	session, err := quic.DialAddr(sendAddr, tlsConf, quicConf)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return session, nil
+	return session, metricsTracer, nil
 }
 
 func streamSendLoop(session quic.Session) error {
@@ -310,4 +320,8 @@ func (c *udpClient) ReceiveMessage() ([]byte, error) {
 
 func (c *udpClient) CloseWithError(int, string) error {
 	return c.conn.Close()
+}
+
+func (t *udpClient) Metrics() rtc.RTTStats {
+	panic(fmt.Errorf("UDP does not provide metrics"))
 }

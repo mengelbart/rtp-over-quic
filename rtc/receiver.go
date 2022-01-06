@@ -16,6 +16,7 @@ type Transport interface {
 	SendMessage([]byte, func(error), func(bool)) error
 	ReceiveMessage() ([]byte, error)
 	CloseWithError(int, string) error
+	Metricer
 }
 
 type MediaSink interface {

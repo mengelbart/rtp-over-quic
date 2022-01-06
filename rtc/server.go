@@ -56,7 +56,10 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 		}
 		go s.receiveStreamLoop(ctx, session)
 
-		receiver, err := s.makeReceiver(&QUICTransport{session}, s.sinkFactory)
+		receiver, err := s.makeReceiver(&QUICTransport{
+			RTTTracer: nil,
+			Session:   session,
+		}, s.sinkFactory)
 		if err != nil {
 			log.Printf("failed to create receiver: %v\n", err)
 			continue
@@ -73,6 +76,7 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 }
 
 type QUICTransport struct {
+	*RTTTracer
 	quic.Session
 }
 
