@@ -96,16 +96,27 @@ func startSender() error {
 	if err != nil {
 		return err
 	}
-
 	senderFactory, err := rtc.GstreamerSenderFactory(ctx, c, session)
 	if err != nil {
 		return err
 	}
-	src, err := gstSrcPipeline(senderCodec, source, 0, 100_000)
-	if err != nil {
-		return err
+
+	var src rtc.MediaSource
+	if senderCodec == "syncodec" {
+		src, err = syncodecPipeline(100_000)
+		if err != nil {
+			return err
+		}
+	} else {
+		var gstSrc *gstsrc.Pipeline
+		gstSrc, err = gstSrcPipeline(senderCodec, source, 0, 100_000)
+		if err != nil {
+			return err
+		}
+		defer gstSrc.Close()
+		src = gstSrc
 	}
-	defer src.Close()
+
 	s, err := senderFactory(src)
 	if err != nil {
 		return err
@@ -240,5 +251,6 @@ func syncodecPipeline(initialBitrate uint) (rtc.MediaSource, error) {
 		return nil, err
 	}
 	sw.Codec = encoder
+	go sw.Start()
 	return sw, nil
 }

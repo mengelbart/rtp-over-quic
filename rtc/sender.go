@@ -69,6 +69,10 @@ func (c *rateController) screamLoopFactory(ctx context.Context, file io.Writer) 
 					if err != nil {
 						log.Printf("failed to get target bitrate: %v\n", err)
 					}
+					if target < 0 {
+						log.Printf("got negative target bitrate: %v\n", target)
+						continue
+					}
 					stats := bwe.GetStats()
 					fmt.Fprintf(
 						file, "%v, %v, %v, %v, %v, %v, %v\n",
@@ -81,10 +85,6 @@ func (c *rateController) screamLoopFactory(ctx context.Context, file io.Writer) 
 						stats["hiSeqAckStream0"],
 					)
 					if len(c.pipelines) == 0 {
-						continue
-					}
-					if target < 0 {
-						log.Printf("got negative target bitrate: %v\n", target)
 						continue
 					}
 					share := target / len(c.pipelines)
@@ -266,10 +266,9 @@ func (s *Sender) getRTPWriter(id uint64) interceptor.RTPWriter {
 			return 0, err
 		}
 
-		//if err := s.session.SendMessage(append(headerBuf, payload...), nil, nil); err != nil {
 		packetBuffer := append(headerBuf, payload...)
 		dgramBuffer := append(idBytes, packetBuffer...)
-		if err := s.session.SendMessage(dgramBuffer, nil, nil); err != nil {
+		if err := s.session.SendMessage(dgramBuffer); err != nil {
 			s.close()
 			if qerr, ok := err.(*quic.ApplicationError); ok && qerr.ErrorCode == 0 {
 				log.Printf("connection closed by remote")

@@ -304,8 +304,8 @@ github.com/mattn/go-isatty v0.0.14/go.mod h1:7GGIvUiUoEMVVmxf/4nioHXj79iQHKdU27k
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
 github.com/mengelbart/gst-go v0.0.0-20211216165356-08a819d18494 h1:V+xe4cRnwrB0GjaCagWrPVTkf1IINLGdv1aPz9HSYcs=
 github.com/mengelbart/gst-go v0.0.0-20211216165356-08a819d18494/go.mod h1:J9js686VBdevB5wQODy0ZTDtUsMipxoSpedYVXsJ1vU=
-github.com/mengelbart/quic-go v0.7.1-0.20211218141714-fb28a95a5866 h1:V6oNa/2KuVUdZVs5h3BRUkY2CD+VsaXrXYT4ja2+cwc=
-github.com/mengelbart/quic-go v0.7.1-0.20211218141714-fb28a95a5866/go.mod h1:YtzP8bxRVCBlO77yRanE264+fY/T2U9ZlW1AaHOsMOg=
+github.com/mengelbart/quic-go v0.7.1-0.20220106093653-440c23ccbc40 h1:qxCW178XdOIYDyeFJcpIQs1tGoFzckjZHGeVIKMyRjM=
+github.com/mengelbart/quic-go v0.7.1-0.20220106093653-440c23ccbc40/go.mod h1:YtzP8bxRVCBlO77yRanE264+fY/T2U9ZlW1AaHOsMOg=
 github.com/mengelbart/scream-go v0.3.0 h1:CKcbsQTzAxtLeDnlOvYdao4urU22M8QbqTxZwcmD0/Q=
 github.com/mengelbart/scream-go v0.3.0/go.mod h1:Yre6kUFLW62SKaIjBBZF/E93fEBqcCqn6bZyrjljd5k=
 github.com/mengelbart/syncodec v0.0.0-20211121123228-d94cb52b9e9e h1:whVLCvI8ythend7BkFQAtY8NwK7fdaCPoPEjykJdqxM=

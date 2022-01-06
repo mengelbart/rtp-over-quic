@@ -82,11 +82,11 @@ func (s *Server) receiveStreamLoop(ctx context.Context, session quic.Session) er
 	log.Println("got stream")
 	buf := make([]byte, 1200)
 	for {
-		n, err := stream.Read(buf)
+		_, err := stream.Read(buf)
 		if err != nil {
 			return err
 		}
-		log.Printf("received %v stream bytes\n", n)
+		//log.Printf("received %v stream bytes\n", n)
 	}
 }
 

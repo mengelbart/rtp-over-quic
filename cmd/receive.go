@@ -77,7 +77,15 @@ func startReceiver() error {
 	if err != nil {
 		return err
 	}
-	server, err := rtc.NewServer(receiverFactory, receiveAddr, gstSinkFactory(receiverCodec, sink), tracer)
+
+	var mediaSink rtc.MediaSinkFactory = func() (rtc.MediaSink, error) {
+		return nopCloser{io.Discard}, nil
+	}
+	if receiverCodec != "syncodec" {
+		mediaSink = gstSinkFactory(receiverCodec, sink)
+	}
+
+	server, err := rtc.NewServer(receiverFactory, receiveAddr, mediaSink, tracer)
 	if err != nil {
 		return err
 	}

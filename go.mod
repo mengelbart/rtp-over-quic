@@ -14,17 +14,14 @@ require (
 )
 
 require (
-	github.com/francoispqt/gojay v1.2.13 // indirect
-	github.com/marten-seemann/qtls-go1-18 v0.1.0-beta.1 // indirect
-)
-
-require (
 	github.com/cheekybits/genny v1.0.0 // indirect
+	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.4 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.0 // indirect
+	github.com/marten-seemann/qtls-go1-18 v0.1.0-beta.1 // indirect
 	github.com/mengelbart/scream-go v0.3.0 // indirect
 	github.com/mengelbart/syncodec v0.0.0-20211121123228-d94cb52b9e9e
 	github.com/nxadm/tail v1.4.8 // indirect
@@ -41,7 +38,7 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-replace github.com/lucas-clemente/quic-go v0.24.0 => github.com/mengelbart/quic-go v0.7.1-0.20211218141714-fb28a95a5866
+replace github.com/lucas-clemente/quic-go v0.24.0 => github.com/mengelbart/quic-go v0.7.1-0.20220106093653-440c23ccbc40
 
 //replace github.com/lucas-clemente/quic-go v0.24.0 => ../quic-go
 

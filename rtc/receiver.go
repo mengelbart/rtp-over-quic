@@ -157,8 +157,7 @@ func (r *Receiver) rtcpWriter(pkts []rtcp.Packet, _ interceptor.Attributes) (int
 	if err != nil {
 		return 0, err
 	}
-	//return len(buf), r.session.SendMessage(buf, nil, nil)
-	return len(buf), r.session.SendMessage(buf, nil, nil)
+	return len(buf), r.session.SendMessage(buf)
 }
 
 func (r *Receiver) Close() error {
