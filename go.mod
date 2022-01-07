@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/lucas-clemente/quic-go v0.24.0
-	github.com/mengelbart/gst-go v0.0.0-20211216165356-08a819d18494
+	github.com/mengelbart/gst-go v0.0.0-20220107173656-a37b0943ac29
 	github.com/pion/interceptor v0.1.5-0.20220105143926-4067bef17709
 	github.com/pion/interceptor/scream v0.1.4
 	github.com/pion/rtcp v1.2.9
@@ -20,7 +20,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.4 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.0 // indirect
-	github.com/mengelbart/scream-go v0.3.0 // indirect
+	github.com/mengelbart/scream-go v0.3.0
 	github.com/mengelbart/syncodec v0.0.0-20211121123228-d94cb52b9e9e
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
