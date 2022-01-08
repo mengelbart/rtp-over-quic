@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/logging"
@@ -212,9 +213,10 @@ func connectQUIC(qlogger logging.Tracer) (quic.Session, *rtc.RTTTracer, error) {
 	}
 	tracer := logging.NewMultiplexedTracer(tracers...)
 	quicConf := &quic.Config{
-		EnableDatagrams: true,
-		Tracer:          tracer,
-		DisableCC:       !newReno,
+		EnableDatagrams:      true,
+		HandshakeIdleTimeout: 15 * time.Second,
+		Tracer:               tracer,
+		DisableCC:            !newReno,
 	}
 	session, err := quic.DialAddr(sendAddr, tlsConf, quicConf)
 	if err != nil {
