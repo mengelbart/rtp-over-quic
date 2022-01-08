@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/logging"
@@ -213,7 +212,6 @@ func connectQUIC(qlogger logging.Tracer) (quic.Session, *rtc.RTTTracer, error) {
 	}
 	tracer := logging.NewMultiplexedTracer(tracers...)
 	quicConf := &quic.Config{
-		MaxIdleTimeout:  time.Second,
 		EnableDatagrams: true,
 		Tracer:          tracer,
 		DisableCC:       !newReno,

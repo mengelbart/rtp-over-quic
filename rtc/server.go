@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"sync"
-	"time"
 
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/logging"
@@ -24,7 +23,6 @@ type Server struct {
 func NewServer(f ReceiverFactory, addr string, sinkFactory MediaSinkFactory, tracer logging.Tracer) (*Server, error) {
 	quicConf := &quic.Config{
 		EnableDatagrams: true,
-		MaxIdleTimeout:  time.Second,
 		Tracer:          tracer,
 	}
 
