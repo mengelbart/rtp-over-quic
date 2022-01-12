@@ -82,13 +82,16 @@ func (c *rateController) screamLoopFactory(ctx context.Context, file io.Writer) 
 					}
 					stats := bwe.GetStats()
 					fmt.Fprintf(
-						file, "%v, %v, %v, %v, %v, %v, %v\n",
+						file, "%v, %v, %v, %v, %v, %v, %v, %v, %v, %v\n",
 						now.UnixMilli(),
 						target,
 						stats["queueDelay"],
+						stats["sRTT"],
 						stats["cwnd"],
 						stats["bytesInFlightLog"],
 						stats["rateLostStream0"],
+						stats["rateTransmittedStream0"],
+						stats["rateAckedStream0"],
 						stats["hiSeqAckStream0"],
 					)
 					if len(c.pipelines) == 0 {
