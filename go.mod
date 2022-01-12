@@ -5,8 +5,8 @@ go 1.17
 require (
 	github.com/lucas-clemente/quic-go v0.24.0
 	github.com/mengelbart/gst-go v0.0.0-20220107173656-a37b0943ac29
-	github.com/pion/interceptor v0.1.5-0.20220105143926-4067bef17709
-	github.com/pion/interceptor/scream v0.1.4
+	github.com/pion/interceptor v0.1.6-0.20220112141211-c76b294bd56e
+	github.com/pion/interceptor/scream v0.1.5
 	github.com/pion/rtcp v1.2.9
 	github.com/pion/rtp v1.7.4
 	github.com/spf13/cobra v1.3.0
@@ -36,8 +36,8 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-replace github.com/lucas-clemente/quic-go v0.24.0 => github.com/mengelbart/quic-go v0.7.1-0.20220106181114-eb383af33fad
+replace github.com/lucas-clemente/quic-go v0.24.0 => github.com/mengelbart/quic-go v0.7.1-0.20220112135540-cee0041361fb
 
 //replace github.com/lucas-clemente/quic-go v0.24.0 => ../quic-go
 
-replace github.com/pion/interceptor/scream v0.1.4 => github.com/pion/interceptor v0.1.5-0.20211218140245-111734e7ca1e
+replace github.com/pion/interceptor/scream v0.1.5 => github.com/pion/interceptor v0.1.6-0.20220112135945-47f08b5055be
