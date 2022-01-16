@@ -121,7 +121,8 @@ func (c *rateController) gccLoopFactory(ctx context.Context, file io.Writer) cc.
 						log.Printf("got negative target bitrate: %v\n", target)
 						continue
 					}
-					fmt.Fprintf(file, "%v, %v\n", now.UnixMilli(), target)
+					stats := bwe.GetStats()
+					fmt.Fprintf(file, "%v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v\n", now.UnixMilli(), target, stats["lossTargetBitrate"], stats["averageLoss"], stats["delayTargetBitrate"], stats["delayMeasurement"], stats["delayEstimate"], stats["delayThreshold"], stats["rtt"], stats["usage"], stats["state"])
 					if len(c.pipelines) == 0 {
 						continue
 					}
