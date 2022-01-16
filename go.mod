@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/lucas-clemente/quic-go v0.24.0
 	github.com/mengelbart/gst-go v0.0.0-20220107173656-a37b0943ac29
-	github.com/pion/interceptor v0.1.6-0.20220112141211-c76b294bd56e
+	github.com/pion/interceptor v0.1.6-0.20220115193159-21bd73dbab13
 	github.com/pion/interceptor/scream v0.1.5
 	github.com/pion/rtcp v1.2.9
 	github.com/pion/rtp v1.7.4

@@ -345,8 +345,8 @@ github.com/pascaldekloe/goe v0.1.0/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144T
 github.com/pelletier/go-toml v1.9.4/go.mod h1:u1nR/EPcESfeI/szUZKdtJ0xRNbUoANCkoOuaOx1Y+c=
 github.com/pion/interceptor v0.1.6-0.20220112135945-47f08b5055be h1:4KDAtPB93tf7ij7oVtggn0bsrskAMfMeHgGWjQkHyaQ=
 github.com/pion/interceptor v0.1.6-0.20220112135945-47f08b5055be/go.mod h1:8+C4qnS5JGLrWSm80B1XMtEnhqYdxvrJw1+0QNQC0ok=
-github.com/pion/interceptor v0.1.6-0.20220112141211-c76b294bd56e h1:fiPIqVPm5RdGMjFyoGFIi2TPYHcrNJs9YE4nadrvny4=
-github.com/pion/interceptor v0.1.6-0.20220112141211-c76b294bd56e/go.mod h1:Lh3JSl/cbJ2wP8I3ccrjh1K/deRGRn3UlSPuOTiHb6U=
+github.com/pion/interceptor v0.1.6-0.20220115193159-21bd73dbab13 h1:uSb4l7TnA9WjbAJUg52ShM1hQXyAzhdM7ysZqjEfSG4=
+github.com/pion/interceptor v0.1.6-0.20220115193159-21bd73dbab13/go.mod h1:Lh3JSl/cbJ2wP8I3ccrjh1K/deRGRn3UlSPuOTiHb6U=
 github.com/pion/logging v0.2.2 h1:M9+AIj/+pxNsDfAT64+MAVgJO0rsyLnoJKCqf//DoeY=
 github.com/pion/logging v0.2.2/go.mod h1:k0/tDVsRCX2Mb2ZEmTqNa7CWsQPc+YYCB7Q+5pahoms=
 github.com/pion/randutil v0.1.0 h1:CFG1UdESneORglEsnimhUjf33Rwjubwj6xfiOXBa3mA=
