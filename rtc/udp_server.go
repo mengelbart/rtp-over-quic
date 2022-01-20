@@ -73,6 +73,10 @@ func (s *UDPServer) Listen(ctx context.Context) error {
 	}
 }
 
+func (s *UDPServer) Close() error {
+	return s.conn.Close()
+}
+
 type udpTransport struct {
 	conn *net.UDPConn
 	addr *net.UDPAddr
@@ -100,8 +104,4 @@ func (t *udpTransport) CloseWithError(code int, msg string) error {
 
 func (t *udpTransport) Metrics() RTTStats {
 	panic(fmt.Errorf("UDP does not provide metrics"))
-}
-
-func (s *UDPServer) Close() error {
-	return s.conn.Close()
 }

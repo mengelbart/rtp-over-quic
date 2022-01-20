@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -120,6 +121,12 @@ func startSender() error {
 
 	case "udp":
 		transport, err = connectUDP()
+		if err != nil {
+			return err
+		}
+
+	case "tcp":
+		transport, err = connectTCP()
 		if err != nil {
 			return err
 		}
@@ -326,4 +333,53 @@ func (c *udpClient) CloseWithError(int, string) error {
 
 func (t *udpClient) Metrics() rtc.RTTStats {
 	panic(fmt.Errorf("UDP does not provide metrics"))
+}
+
+func connectTCP() (*tcpClient, error) {
+	conn, err := net.Dial("tcp", sendAddr)
+	if err != nil {
+		return nil, err
+	}
+	return &tcpClient{
+		conn: conn,
+	}, nil
+}
+
+type tcpClient struct {
+	conn net.Conn
+}
+
+func (c *tcpClient) SendMessage(msg []byte, _ func(error), _ func(bool)) error {
+	buf := make([]byte, 2)
+	binary.BigEndian.PutUint16(buf[0:2], uint16(len(msg)))
+	n, err := c.conn.Write(append(buf, msg...))
+	if err != nil {
+		return err
+	}
+	if n != len(msg)+2 {
+		log.Fatalf("not enough bytes written to tcp conn: n=%v, expected=%v\n", n, len(msg)+2)
+	}
+	return nil
+}
+
+func (c *tcpClient) ReceiveMessage() ([]byte, error) {
+	prefix := make([]byte, 2)
+	if _, err := io.ReadFull(c.conn, prefix); err != nil {
+		return nil, fmt.Errorf("failed to read length from TCP conn: %w, exiting", err)
+	}
+	length := binary.BigEndian.Uint16(prefix)
+	buf := make([]byte, length)
+	if _, err := io.ReadFull(c.conn, buf); err != nil {
+
+		return nil, fmt.Errorf("failed to read complete frame from TCP conn: %w, exiting", err)
+	}
+	return buf, nil
+}
+
+func (c *tcpClient) CloseWithError(int, string) error {
+	return c.conn.Close()
+}
+
+func (t *tcpClient) Metrics() rtc.RTTStats {
+	panic(fmt.Errorf("TCP does not provide metrics"))
 }

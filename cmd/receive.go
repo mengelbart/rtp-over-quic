@@ -114,6 +114,18 @@ func startReceiver() error {
 		go func() {
 			errCh <- server.Listen(ctx)
 		}()
+
+	case "tcp":
+		server, err := rtc.NewTCPServer(receiverFactory, receiveAddr, mediaSink)
+		if err != nil {
+			return err
+		}
+
+		defer server.Close()
+
+		go func() {
+			errCh <- server.Listen(ctx)
+		}()
 	default:
 		return fmt.Errorf("unknown transport protocol: %v", receiveTransport)
 	}
