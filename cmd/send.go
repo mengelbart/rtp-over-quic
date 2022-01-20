@@ -243,7 +243,9 @@ func streamSendLoop(session quic.Session) error {
 
 func gstSrcPipeline(codec string, src string, ssrc uint, initialBitrate uint) (*gstsrc.Pipeline, error) {
 	if src != "videotestsrc" {
-		src = fmt.Sprintf("filesrc location=%v ! queue ! decodebin ! videoconvert ", src)
+		src = fmt.Sprintf("filesrc location=%v ! queue ! decodebin ! videoconvert ! clocksync", src)
+	} else {
+		src = "videotestsrc ! clocksync"
 	}
 	srcPipeline, err := gstsrc.NewPipeline(codec, src)
 	if err != nil {

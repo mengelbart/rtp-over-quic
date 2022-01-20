@@ -36,7 +36,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -yqq \
         gstreamer1.0-plugins-bad \
         gstreamer1.0-plugins-ugly \
         gstreamer1.0-libav \
-        gstreamer1.0-doc \
         gstreamer1.0-tools \
         gstreamer1.0-x \
         gstreamer1.0-alsa \

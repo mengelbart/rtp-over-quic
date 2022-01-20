@@ -131,7 +131,7 @@ func startReceiver() error {
 
 func gstSinkFactory(codec string, dst string) rtc.MediaSinkFactory {
 	if dst != "autovideosink" {
-		dst = fmt.Sprintf("matroskamux ! filesink location=%v", dst)
+		dst = fmt.Sprintf("clocksync ! y4menc ! filesink location=%v", dst)
 	}
 	return func() (rtc.MediaSink, error) {
 		dstPipeline, err := gstsink.NewPipeline(codec, dst)
