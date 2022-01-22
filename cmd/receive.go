@@ -144,6 +144,8 @@ func startReceiver() error {
 func gstSinkFactory(codec string, dst string) rtc.MediaSinkFactory {
 	if dst != "autovideosink" {
 		dst = fmt.Sprintf("clocksync ! y4menc ! filesink location=%v", dst)
+	} else {
+		dst = "clocksync ! autovideosink"
 	}
 	return func() (rtc.MediaSink, error) {
 		dstPipeline, err := gstsink.NewPipeline(codec, dst)
