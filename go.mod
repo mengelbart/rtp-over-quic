@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/lucas-clemente/quic-go v0.24.0
-	github.com/mengelbart/gst-go v0.0.0-20220121214609-7636ee532f91
+	github.com/mengelbart/gst-go v0.0.0-20220122113650-ffede8e23db9
 	github.com/mengelbart/scream-go v0.3.0
 	github.com/mengelbart/syncodec v0.0.0-20220105132658-94ec57e63a65
 	github.com/pion/interceptor v0.1.6

@@ -300,8 +300,8 @@ github.com/mattn/go-isatty v0.0.11/go.mod h1:PhnuNfih5lzO57/f3n+odYbM4JtupLOxQOA
 github.com/mattn/go-isatty v0.0.12/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Kysco4FUpU=
 github.com/mattn/go-isatty v0.0.14/go.mod h1:7GGIvUiUoEMVVmxf/4nioHXj79iQHKdU27kJ6hsGG94=
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
-github.com/mengelbart/gst-go v0.0.0-20220121214609-7636ee532f91 h1:GtRRqmxXqYPRaBW3IcCmWKOdqzakLN4VuMlla5zOmxE=
-github.com/mengelbart/gst-go v0.0.0-20220121214609-7636ee532f91/go.mod h1:J9js686VBdevB5wQODy0ZTDtUsMipxoSpedYVXsJ1vU=
+github.com/mengelbart/gst-go v0.0.0-20220122113650-ffede8e23db9 h1:+1P1/nRhKgZWYN+DfkjbFfa21pQXB4Nczm1fPHkz9I0=
+github.com/mengelbart/gst-go v0.0.0-20220122113650-ffede8e23db9/go.mod h1:J9js686VBdevB5wQODy0ZTDtUsMipxoSpedYVXsJ1vU=
 github.com/mengelbart/quic-go v0.7.1-0.20220112135540-cee0041361fb h1:GSe9IYxem3HtnERlobe7GMITca82uhPOhyiA6TAgrH8=
 github.com/mengelbart/quic-go v0.7.1-0.20220112135540-cee0041361fb/go.mod h1:paZuzjXCE5mj6sikVLMvqXk8lJV2AsqtJ6bDhjEfxx0=
 github.com/mengelbart/scream-go v0.3.0 h1:CKcbsQTzAxtLeDnlOvYdao4urU22M8QbqTxZwcmD0/Q=

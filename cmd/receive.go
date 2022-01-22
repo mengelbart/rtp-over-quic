@@ -150,6 +150,7 @@ func gstSinkFactory(codec string, dst string) rtc.MediaSinkFactory {
 		if err != nil {
 			return nil, err
 		}
+		log.Printf("run gstreamer pipeline: [%v]", dstPipeline.String())
 		dstPipeline.Start()
 		return dstPipeline, nil
 	}

@@ -258,6 +258,7 @@ func gstSrcPipeline(codec string, src string, ssrc uint, initialBitrate uint) (*
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("run gstreamer pipeline: [%v]", srcPipeline.String())
 	srcPipeline.SetSSRC(ssrc)
 	srcPipeline.SetBitRate(initialBitrate)
 	go srcPipeline.Start()
