@@ -9,14 +9,19 @@ import (
 	"github.com/pion/rtp"
 )
 
-func rtpFormat(pkt *rtp.Packet, _ interceptor.Attributes) string {
+type rtpFormatter struct {
+	seqnr unwrapper
+}
+
+func (f *rtpFormatter) rtpFormat(pkt *rtp.Packet, _ interceptor.Attributes) string {
 	var twcc rtp.TransportCCExtension
+	unwrappedSeqNr := f.seqnr.unwrap(pkt.SequenceNumber)
 	if len(pkt.GetExtensionIDs()) > 0 {
 		ext := pkt.GetExtension(pkt.GetExtensionIDs()[0])
 		if err := twcc.Unmarshal(ext); err != nil {
 			panic(err)
 		}
-		return fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, %v\n",
+		return fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, %v, %v\n",
 			time.Now().UnixMilli(),
 			pkt.PayloadType,
 			pkt.SSRC,
@@ -25,9 +30,10 @@ func rtpFormat(pkt *rtp.Packet, _ interceptor.Attributes) string {
 			pkt.Marker,
 			pkt.MarshalSize(),
 			twcc.TransportSequence,
+			unwrappedSeqNr,
 		)
 	}
-	return fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v\n",
+	return fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, %v\n",
 		time.Now().UnixMilli(),
 		pkt.PayloadType,
 		pkt.SSRC,
@@ -35,6 +41,7 @@ func rtpFormat(pkt *rtp.Packet, _ interceptor.Attributes) string {
 		pkt.Timestamp,
 		pkt.Marker,
 		pkt.MarshalSize(),
+		unwrappedSeqNr,
 	)
 }
 

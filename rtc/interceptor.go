@@ -12,8 +12,9 @@ import (
 )
 
 func registerRTPSenderDumper(r *interceptor.Registry, rtp, rtcp io.Writer) error {
+	rf := &rtpFormatter{}
 	rtpDumperInterceptor, err := packetdump.NewSenderInterceptor(
-		packetdump.RTPFormatter(rtpFormat),
+		packetdump.RTPFormatter(rf.rtpFormat),
 		packetdump.RTPWriter(rtp),
 	)
 	if err != nil {
@@ -41,8 +42,9 @@ func registerRTPReceiverDumper(r *interceptor.Registry, rtp, rtcp io.Writer) err
 		return err
 	}
 
+	rf := &rtpFormatter{}
 	rtpDumperInterceptor, err := packetdump.NewReceiverInterceptor(
-		packetdump.RTPFormatter(rtpFormat),
+		packetdump.RTPFormatter(rf.rtpFormat),
 		packetdump.RTPWriter(rtp),
 	)
 	if err != nil {
