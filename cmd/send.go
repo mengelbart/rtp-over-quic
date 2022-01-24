@@ -32,6 +32,7 @@ var (
 	source         string
 	ccDump         string
 	senderQLOGDir  string
+	tcpCongAlg     string
 	scream         bool
 	gcc            bool
 	newReno        bool
@@ -44,7 +45,7 @@ func init() {
 
 	rootCmd.AddCommand(sendCmd)
 
-	sendCmd.Flags().StringVar(&sendTransport, "transport", "quic", "Transport protocol to use: quic or udp")
+	sendCmd.Flags().StringVar(&sendTransport, "transport", "quic", "Transport protocol to use: quic, udp or tcp")
 	sendCmd.Flags().StringVarP(&sendAddr, "addr", "a", ":4242", "QUIC server address")
 	sendCmd.Flags().StringVarP(&senderCodec, "codec", "c", "h264", "Media codec")
 	sendCmd.Flags().StringVar(&source, "source", "videotestsrc", "Media source")
@@ -52,6 +53,7 @@ func init() {
 	sendCmd.Flags().StringVar(&senderRTCPDump, "rtcp-dump", "", "RTCP dump file, 'stdout' for Stdout")
 	sendCmd.Flags().StringVar(&ccDump, "cc-dump", "", "Congestion Control log file, use 'stdout' for Stdout")
 	sendCmd.Flags().StringVar(&senderQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
+	sendCmd.Flags().StringVar(&tcpCongAlg, "tcp-congestion", "reno", "TCP Congestion control algorithm to use, only when --transport is tcp")
 	sendCmd.Flags().BoolVarP(&scream, "scream", "s", false, "Use SCReAM")
 	sendCmd.Flags().BoolVar(&localRFC8888, "local-rfc8888", false, "Generate local RFC 8888 feedback")
 	sendCmd.Flags().BoolVarP(&gcc, "gcc", "g", false, "Use Google Congestion Control")
@@ -337,10 +339,47 @@ func (t *udpClient) Metrics() rtc.RTTStats {
 }
 
 func connectTCP() (*tcpClient, error) {
-	conn, err := net.Dial("tcp", sendAddr)
+	dialer := &net.Dialer{
+		Control: func(_, _ string, c syscall.RawConn) error {
+			var operr error
+			if err := c.Control(func(fd uintptr) {
+				operr = syscall.SetsockoptString(int(fd), syscall.IPPROTO_TCP, syscall.TCP_CONGESTION, tcpCongAlg)
+			}); err != nil {
+				return err
+			}
+			if operr != nil {
+				return fmt.Errorf("failed to set TCP congestion control algorithm to '%v': %w", tcpCongAlg, operr)
+			}
+			return nil
+		},
+	}
+	conn, err := dialer.Dial("tcp", sendAddr)
 	if err != nil {
 		return nil, err
 	}
+	// TODO: Use something like this for tcp cwnd logging:
+	//go func() {
+	//	t := time.NewTicker(200 * time.Millisecond)
+	//	for range t.C {
+	//		conn, ok := conn.(interface {
+	//			SyscallConn() (syscall.RawConn, error)
+	//		})
+	//		if !ok {
+	//			panic(errors.New("doesn't have a SyscallConn"))
+	//		}
+	//		rawConn, err := conn.SyscallConn()
+	//		if err != nil {
+	//			panic(fmt.Errorf("couldn't get syscall.RawConn: %w", err))
+	//		}
+	//		rawConn.Control(func(fd uintptr) {
+	//			info, serr := unix.GetsockoptTCPInfo(int(fd), unix.SOL_TCP, unix.TCP_INFO)
+	//			if serr != nil {
+	//				panic(serr)
+	//			}
+	//			fmt.Printf("%v\n", info.Snd_cwnd)
+	//		})
+	//	}
+	//}()
 	return &tcpClient{
 		conn: conn,
 	}, nil
