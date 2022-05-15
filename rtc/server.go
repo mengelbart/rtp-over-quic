@@ -57,8 +57,8 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 		go s.receiveStreamLoop(ctx, session)
 
 		receiver, err := s.makeReceiver(&QUICTransport{
-			RTTTracer: nil,
-			Session:   session,
+			RTTTracer:  nil,
+			Connection: session,
 		}, s.sinkFactory)
 		if err != nil {
 			log.Printf("failed to create receiver: %v\n", err)
@@ -77,14 +77,14 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 
 type QUICTransport struct {
 	*RTTTracer
-	quic.Session
+	quic.Connection
 }
 
 func (t *QUICTransport) CloseWithError(code int, msg string) error {
-	return t.Session.CloseWithError(quic.ApplicationErrorCode(code), msg)
+	return t.Connection.CloseWithError(quic.ApplicationErrorCode(code), msg)
 }
 
-func (s *Server) receiveStreamLoop(ctx context.Context, session quic.Session) error {
+func (s *Server) receiveStreamLoop(ctx context.Context, session quic.Connection) error {
 	log.Println("Accept stream")
 	defer log.Println("Exiting receive stream loop")
 	stream, err := session.AcceptUniStream(ctx)

@@ -107,15 +107,15 @@ func startSender() error {
 		if err != nil {
 			return err
 		}
-		var session quic.Session
+		var session quic.Connection
 		var tracer *rtc.RTTTracer
 		session, tracer, err = connectQUIC(qlogWriter)
 		if err != nil {
 			return err
 		}
 		transport = &rtc.QUICTransport{
-			RTTTracer: tracer,
-			Session:   session,
+			RTTTracer:  tracer,
+			Connection: session,
 		}
 		if sendStream {
 			go streamSendLoop(session)
@@ -210,7 +210,7 @@ func getQLOGTracer(path string) (logging.Tracer, error) {
 	}), nil
 }
 
-func connectQUIC(qlogger logging.Tracer) (quic.Session, *rtc.RTTTracer, error) {
+func connectQUIC(qlogger logging.Tracer) (quic.Connection, *rtc.RTTTracer, error) {
 	tlsConf := &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"rtq"},
@@ -234,7 +234,7 @@ func connectQUIC(qlogger logging.Tracer) (quic.Session, *rtc.RTTTracer, error) {
 	return session, metricsTracer, nil
 }
 
-func streamSendLoop(session quic.Session) error {
+func streamSendLoop(session quic.Connection) error {
 	log.Println("Open stream")
 	stream, err := session.OpenUniStream()
 	if err != nil {
