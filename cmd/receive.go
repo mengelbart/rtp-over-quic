@@ -22,8 +22,7 @@ var (
 	receiverCodec    string
 	receiverQLOGDir  string
 	sink             string
-	rfc8888          bool
-	twcc             bool
+	rtcpFeedback     string
 )
 
 func init() {
@@ -38,8 +37,7 @@ func init() {
 	receiveCmd.Flags().StringVar(&receiverRTPDump, "rtp-dump", "", "RTP dump file")
 	receiveCmd.Flags().StringVar(&receiverRTCPDump, "rtcp-dump", "", "RTCP dump file")
 	receiveCmd.Flags().StringVar(&receiverQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
-	receiveCmd.Flags().BoolVarP(&rfc8888, "rfc8888", "r", false, "Send RTCP Feedback for congestion control (RFC 8888)")
-	receiveCmd.Flags().BoolVarP(&twcc, "twcc", "t", false, "Send RTCP transport wide congestion control feedback")
+	receiveCmd.Flags().StringVar(&rtcpFeedback, "rtcp-feedback", "none", "RTCP Congestion Control Feedback to send ('none', 'rfc8888', 'twcc')")
 }
 
 var receiveCmd = &cobra.Command{
@@ -67,8 +65,7 @@ func startReceiver() error {
 	c := rtc.ReceiverConfig{
 		RTPDump:  rtpDumpFile,
 		RTCPDump: rtcpDumpfile,
-		RFC8888:  rfc8888,
-		TWCC:     twcc,
+		Feedback: getRTCP(rtcpFeedback),
 	}
 
 	receiverFactory, err := rtc.GstreamerReceiverFactory(c)
@@ -138,6 +135,20 @@ func startReceiver() error {
 		return err
 	case <-sigs:
 		return nil
+	}
+}
+
+func getRTCP(choice string) rtc.RTCPFeedback {
+	switch choice {
+	case "none":
+		return rtc.RTCP_NONE
+	case "rfc8888":
+		return rtc.RTCP_RFC8888
+	case "twcc":
+		return rtc.RTCP_TWCC
+	default:
+		log.Printf("WARNING: unknown RTCP Congestion Control Feedback type: %v, using default ('none')\n", choice)
+		return rtc.RTCP_NONE
 	}
 }
 

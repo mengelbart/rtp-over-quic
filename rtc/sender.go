@@ -20,6 +20,14 @@ import (
 	"github.com/pion/rtp"
 )
 
+type RTPCongestionControlAlgo int
+
+const (
+	RTP_CC_NONE RTPCongestionControlAlgo = iota
+	RTP_CC_SCREAM
+	RTP_CC_GCC
+)
+
 const transportCCURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
 
 type SenderFactory func(MediaSource) (*Sender, error)
@@ -50,8 +58,7 @@ type SenderConfig struct {
 	RTPDump      io.Writer
 	RTCPDump     io.Writer
 	CCDump       io.Writer
-	SCReAM       bool
-	GCC          bool
+	CC           RTPCongestionControlAlgo
 	LocalRFC8888 bool
 }
 
@@ -142,12 +149,12 @@ func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session Transpo
 		return nil, err
 	}
 	var rc rateController
-	if c.SCReAM {
+	switch c.CC {
+	case RTP_CC_SCREAM:
 		if err := registerSCReAM(&ir, rc.screamLoopFactory(ctx, c.CCDump)); err != nil {
 			return nil, err
 		}
-	}
-	if c.GCC {
+	case RTP_CC_GCC:
 		if err := registerGCC(&ir, rc.gccLoopFactory(ctx, c.CCDump)); err != nil {
 			return nil, err
 		}

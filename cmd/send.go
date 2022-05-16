@@ -33,9 +33,8 @@ var (
 	ccDump         string
 	senderQLOGDir  string
 	tcpCongAlg     string
-	scream         bool
-	gcc            bool
-	newReno        bool
+	rtpCC          string
+	quicCC         string
 	sendStream     bool
 	localRFC8888   bool
 )
@@ -54,10 +53,9 @@ func init() {
 	sendCmd.Flags().StringVar(&ccDump, "cc-dump", "", "Congestion Control log file, use 'stdout' for Stdout")
 	sendCmd.Flags().StringVar(&senderQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
 	sendCmd.Flags().StringVar(&tcpCongAlg, "tcp-congestion", "reno", "TCP Congestion control algorithm to use, only when --transport is tcp")
-	sendCmd.Flags().BoolVarP(&scream, "scream", "s", false, "Use SCReAM")
+	sendCmd.Flags().StringVar(&rtpCC, "rtp-cc", "none", "RTP congestion control algorithm. ('none', 'scream', 'gcc')")
 	sendCmd.Flags().BoolVar(&localRFC8888, "local-rfc8888", false, "Generate local RFC 8888 feedback")
-	sendCmd.Flags().BoolVarP(&gcc, "gcc", "g", false, "Use Google Congestion Control")
-	sendCmd.Flags().BoolVarP(&newReno, "newreno", "n", false, "Enable NewReno Congestion Control")
+	sendCmd.Flags().StringVar(&quicCC, "quic-cc", "none", "QUIC congestion control algorithm. ('none', 'newreno')")
 	sendCmd.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
 }
 
@@ -94,8 +92,7 @@ func startSender() error {
 		RTPDump:      rtpDumpFile,
 		RTCPDump:     rtcpDumpFile,
 		CCDump:       ccDumpFile,
-		SCReAM:       scream,
-		GCC:          gcc,
+		CC:           getCC(rtpCC),
 		LocalRFC8888: localRFC8888,
 	}
 
@@ -179,6 +176,20 @@ func startSender() error {
 	}
 }
 
+func getCC(choice string) rtc.RTPCongestionControlAlgo {
+	switch choice {
+	case "none":
+		return rtc.RTP_CC_NONE
+	case "scream":
+		return rtc.RTP_CC_SCREAM
+	case "gcc":
+		return rtc.RTP_CC_GCC
+	default:
+		log.Printf("WARNING: unknown RTP congestion control algorithm: %v, using default ('none')\n", choice)
+		return rtc.RTP_CC_NONE
+	}
+}
+
 func getQLOGTracer(path string) (logging.Tracer, error) {
 	if len(path) == 0 {
 		return nil, nil
@@ -198,8 +209,8 @@ func getQLOGTracer(path string) (logging.Tracer, error) {
 			return nil, err
 		}
 	}
-	return qlog.NewTracer(func(_ logging.Perspective, connectionID []byte) io.WriteCloser {
-		file := fmt.Sprintf("%s/%x.qlog", strings.TrimRight(path, "/"), connectionID)
+	return qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
+		file := fmt.Sprintf("%s/%x_%v.qlog", strings.TrimRight(path, "/"), connectionID, p)
 		w, err := os.Create(file)
 		if err != nil {
 			log.Printf("failed to create qlog file %s: %v", path, err)
@@ -225,7 +236,7 @@ func connectQUIC(qlogger logging.Tracer) (quic.Connection, *rtc.RTTTracer, error
 		EnableDatagrams:      true,
 		HandshakeIdleTimeout: 15 * time.Second,
 		Tracer:               tracer,
-		DisableCC:            !newReno,
+		DisableCC:            quicCC != "newreno",
 	}
 	session, err := quic.DialAddr(sendAddr, tlsConf, quicConf)
 	if err != nil {

@@ -12,6 +12,14 @@ import (
 	"github.com/pion/rtcp"
 )
 
+type RTCPFeedback int
+
+const (
+	RTCP_NONE RTCPFeedback = iota
+	RTCP_RFC8888
+	RTCP_TWCC
+)
+
 type Transport interface {
 	SendMessage([]byte, func(error), func(bool)) error
 	ReceiveMessage() ([]byte, error)
@@ -38,8 +46,7 @@ type Receiver struct {
 type ReceiverConfig struct {
 	RTPDump  io.Writer
 	RTCPDump io.Writer
-	RFC8888  bool
-	TWCC     bool
+	Feedback RTCPFeedback
 }
 
 func GstreamerReceiverFactory(c ReceiverConfig) (ReceiverFactory, error) {
@@ -47,12 +54,12 @@ func GstreamerReceiverFactory(c ReceiverConfig) (ReceiverFactory, error) {
 	if err := registerRTPReceiverDumper(&ir, c.RTPDump, c.RTCPDump); err != nil {
 		return nil, err
 	}
-	if c.RFC8888 {
+	switch c.Feedback {
+	case RTCP_RFC8888:
 		if err := registerRFC8888(&ir); err != nil {
 			return nil, err
 		}
-	}
-	if c.TWCC {
+	case RTCP_TWCC:
 		if err := registerTWCC(&ir); err != nil {
 			return nil, err
 		}
