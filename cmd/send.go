@@ -37,6 +37,7 @@ var (
 	quicCC         string
 	sendStream     bool
 	localRFC8888   bool
+	keyLogFile     string
 )
 
 func init() {
@@ -57,6 +58,7 @@ func init() {
 	sendCmd.Flags().BoolVar(&localRFC8888, "local-rfc8888", false, "Generate local RFC 8888 feedback")
 	sendCmd.Flags().StringVar(&quicCC, "quic-cc", "none", "QUIC congestion control algorithm. ('none', 'newreno')")
 	sendCmd.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
+	sendCmd.Flags().StringVar(&keyLogFile, "keylogfile", "", "TLS keys for decrypting traffic e.g. using wireshark")
 }
 
 var sendCmd = &cobra.Command{
@@ -104,9 +106,17 @@ func startSender() error {
 		if err != nil {
 			return err
 		}
+		var keyLogger io.Writer
+		if len(keyLogFile) > 0 {
+			keyLogger, err = os.OpenFile(keyLogFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+			if err != nil {
+				return err
+			}
+		}
+
 		var session quic.Connection
 		var tracer *rtc.RTTTracer
-		session, tracer, err = connectQUIC(qlogWriter)
+		session, tracer, err = connectQUIC(qlogWriter, keyLogger)
 		if err != nil {
 			return err
 		}
@@ -221,8 +231,9 @@ func getQLOGTracer(path string) (logging.Tracer, error) {
 	}), nil
 }
 
-func connectQUIC(qlogger logging.Tracer) (quic.Connection, *rtc.RTTTracer, error) {
+func connectQUIC(qlogger logging.Tracer, keyLogger io.Writer) (quic.Connection, *rtc.RTTTracer, error) {
 	tlsConf := &tls.Config{
+		KeyLogWriter:       keyLogger,
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"rtq"},
 	}
