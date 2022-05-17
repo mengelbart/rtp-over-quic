@@ -5,14 +5,15 @@ go 1.17
 require (
 	github.com/lucas-clemente/quic-go v0.24.0
 	github.com/mengelbart/gst-go v0.0.0-20220122175935-31980159bd82
-	github.com/mengelbart/scream-go v0.3.0
+	github.com/mengelbart/scream-go v0.3.1-0.20220517200438-5d7320a6f6c7
 	github.com/mengelbart/syncodec v0.0.0-20220105132658-94ec57e63a65
-	github.com/pion/interceptor v0.1.6
+	github.com/pion/interceptor v0.1.11
+	github.com/pion/interceptor/rfc8888 v0.1.11
 	github.com/pion/interceptor/scream v0.1.5
-	github.com/pion/rtcp v1.2.9
-	github.com/pion/rtp v1.7.4
+	github.com/pion/rtcp v1.2.10-0.20220517170840-4008494612ec
+	github.com/pion/rtp v1.7.13
 	github.com/spf13/cobra v1.3.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 )
 
 require (
@@ -43,6 +44,6 @@ require (
 
 replace github.com/lucas-clemente/quic-go v0.24.0 => github.com/mengelbart/quic-go v0.7.1-0.20220513091845-f978d053c86f
 
-//replace github.com/lucas-clemente/quic-go v0.24.0 => ../../quic-go
+replace github.com/pion/interceptor/scream v0.1.5 => github.com/pion/interceptor v0.1.12-0.20220517200054-6506046b9c6f
 
-replace github.com/pion/interceptor/scream v0.1.5 => github.com/pion/interceptor v0.1.6-0.20220112135945-47f08b5055be
+replace github.com/pion/interceptor/rfc8888 v0.1.11 => github.com/pion/interceptor v0.1.12-0.20220517194555-ddfc2aabce2b
