@@ -17,6 +17,7 @@ type RTCPFeedback int
 const (
 	RTCP_NONE RTCPFeedback = iota
 	RTCP_RFC8888
+	RTCP_RFC8888_PION
 	RTCP_TWCC
 )
 
@@ -57,6 +58,10 @@ func GstreamerReceiverFactory(c ReceiverConfig) (ReceiverFactory, error) {
 	switch c.Feedback {
 	case RTCP_RFC8888:
 		if err := registerRFC8888(&ir); err != nil {
+			return nil, err
+		}
+	case RTCP_RFC8888_PION:
+		if err := registerRFC8888Pion(&ir); err != nil {
 			return nil, err
 		}
 	case RTCP_TWCC:

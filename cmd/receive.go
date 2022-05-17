@@ -37,7 +37,7 @@ func init() {
 	receiveCmd.Flags().StringVar(&receiverRTPDump, "rtp-dump", "", "RTP dump file")
 	receiveCmd.Flags().StringVar(&receiverRTCPDump, "rtcp-dump", "", "RTCP dump file")
 	receiveCmd.Flags().StringVar(&receiverQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
-	receiveCmd.Flags().StringVar(&rtcpFeedback, "rtcp-feedback", "none", "RTCP Congestion Control Feedback to send ('none', 'rfc8888', 'twcc')")
+	receiveCmd.Flags().StringVar(&rtcpFeedback, "rtcp-feedback", "none", "RTCP Congestion Control Feedback to send ('none', 'rfc8888', 'rfc8888-pion', 'twcc')")
 }
 
 var receiveCmd = &cobra.Command{
@@ -144,6 +144,8 @@ func getRTCP(choice string) rtc.RTCPFeedback {
 		return rtc.RTCP_NONE
 	case "rfc8888":
 		return rtc.RTCP_RFC8888
+	case "rfc8888-pion":
+		return rtc.RTCP_RFC8888_PION
 	case "twcc":
 		return rtc.RTCP_TWCC
 	default:

@@ -2,12 +2,14 @@ package rtc
 
 import (
 	"io"
+	"time"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/cc"
 	"github.com/pion/interceptor/pkg/gcc"
 	"github.com/pion/interceptor/pkg/packetdump"
 	"github.com/pion/interceptor/pkg/twcc"
+	"github.com/pion/interceptor/rfc8888/pkg/rfc8888"
 	"github.com/pion/interceptor/scream/pkg/scream"
 )
 
@@ -56,7 +58,7 @@ func registerRTPReceiverDumper(r *interceptor.Registry, rtp, rtcp io.Writer) err
 }
 
 func registerTWCC(r *interceptor.Registry) error {
-	fbFactory, err := twcc.NewSenderInterceptor()
+	fbFactory, err := twcc.NewSenderInterceptor(twcc.SendInterval(100 * time.Millisecond))
 	if err != nil {
 		return err
 	}
@@ -88,7 +90,16 @@ func registerGCC(r *interceptor.Registry, cb cc.NewPeerConnectionCallback) error
 
 func registerRFC8888(r *interceptor.Registry) error {
 	var rx *scream.ReceiverInterceptorFactory
-	rx, err := scream.NewReceiverInterceptor()
+	rx, err := scream.NewReceiverInterceptor(scream.ReceiverInterval(100 * time.Millisecond))
+	if err != nil {
+		return err
+	}
+	r.Add(rx)
+	return nil
+}
+
+func registerRFC8888Pion(r *interceptor.Registry) error {
+	rx, err := rfc8888.NewSenderInterceptor(rfc8888.SendInterval(100 * time.Millisecond))
 	if err != nil {
 		return err
 	}
