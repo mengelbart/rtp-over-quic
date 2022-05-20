@@ -4,14 +4,16 @@ import (
 	"io"
 	"time"
 
+	"github.com/mengelbart/rtp-over-quic/rtc/scream"
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/cc"
 	"github.com/pion/interceptor/pkg/gcc"
 	"github.com/pion/interceptor/pkg/packetdump"
 	"github.com/pion/interceptor/pkg/twcc"
 	"github.com/pion/interceptor/rfc8888/pkg/rfc8888"
-	"github.com/pion/interceptor/scream/pkg/scream"
 )
+
+const feedbackInterval = 30 * time.Millisecond
 
 func registerRTPSenderDumper(r *interceptor.Registry, rtp, rtcp io.Writer) error {
 	rf := &rtpFormatter{}
@@ -58,7 +60,7 @@ func registerRTPReceiverDumper(r *interceptor.Registry, rtp, rtcp io.Writer) err
 }
 
 func registerTWCC(r *interceptor.Registry) error {
-	fbFactory, err := twcc.NewSenderInterceptor(twcc.SendInterval(100 * time.Millisecond))
+	fbFactory, err := twcc.NewSenderInterceptor(twcc.SendInterval(feedbackInterval))
 	if err != nil {
 		return err
 	}
@@ -88,9 +90,12 @@ func registerGCC(r *interceptor.Registry, cb cc.NewPeerConnectionCallback) error
 	return nil
 }
 
-func registerRFC8888(r *interceptor.Registry) error {
+func registerRFC8888(r *interceptor.Registry, mark bool) error {
 	var rx *scream.ReceiverInterceptorFactory
-	rx, err := scream.NewReceiverInterceptor(scream.ReceiverInterval(100 * time.Millisecond))
+	rx, err := scream.NewReceiverInterceptor(
+		scream.ReceiverInterval(feedbackInterval),
+		scream.ReceiverSetMark(mark),
+	)
 	if err != nil {
 		return err
 	}
@@ -99,7 +104,7 @@ func registerRFC8888(r *interceptor.Registry) error {
 }
 
 func registerRFC8888Pion(r *interceptor.Registry) error {
-	rx, err := rfc8888.NewSenderInterceptor(rfc8888.SendInterval(100 * time.Millisecond))
+	rx, err := rfc8888.NewSenderInterceptor(rfc8888.SendInterval(feedbackInterval))
 	if err != nil {
 		return err
 	}
@@ -107,9 +112,13 @@ func registerRFC8888Pion(r *interceptor.Registry) error {
 	return nil
 }
 
-func registerSCReAM(r *interceptor.Registry, cb scream.NewPeerConnectionCallback) error {
+func registerSCReAM(r *interceptor.Registry, cb scream.NewPeerConnectionCallback, algo scream.PacerLoopAlgorithm) error {
 	var tx *scream.SenderInterceptorFactory
-	tx, err := scream.NewSenderInterceptor(scream.InitialBitrate(100_000), scream.MinBitrate(100_000))
+	tx, err := scream.NewSenderInterceptor(
+		scream.InitialBitrate(100_000),
+		scream.MinBitrate(100_000),
+		scream.PacingAlgorithm(algo),
+	)
 	if err != nil {
 		return err
 	}

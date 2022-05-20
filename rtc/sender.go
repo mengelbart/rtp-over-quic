@@ -13,10 +13,10 @@ import (
 
 	quic "github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/quicvarint"
+	"github.com/mengelbart/rtp-over-quic/rtc/scream"
 	screamcgo "github.com/mengelbart/scream-go"
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/cc"
-	"github.com/pion/interceptor/scream/pkg/scream"
 	"github.com/pion/rtp"
 )
 
@@ -60,6 +60,7 @@ type SenderConfig struct {
 	CCDump       io.Writer
 	CC           RTPCongestionControlAlgo
 	LocalRFC8888 bool
+	SCReAMPacer  scream.PacerLoopAlgorithm
 }
 
 type rateController struct {
@@ -151,7 +152,7 @@ func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session Transpo
 	var rc rateController
 	switch c.CC {
 	case RTP_CC_SCREAM:
-		if err := registerSCReAM(&ir, rc.screamLoopFactory(ctx, c.CCDump)); err != nil {
+		if err := registerSCReAM(&ir, rc.screamLoopFactory(ctx, c.CCDump), c.SCReAMPacer); err != nil {
 			return nil, err
 		}
 	case RTP_CC_GCC:

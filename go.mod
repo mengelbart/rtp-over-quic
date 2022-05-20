@@ -7,9 +7,9 @@ require (
 	github.com/mengelbart/gst-go v0.0.0-20220122175935-31980159bd82
 	github.com/mengelbart/scream-go v0.3.1-0.20220517200438-5d7320a6f6c7
 	github.com/mengelbart/syncodec v0.0.0-20220105132658-94ec57e63a65
-	github.com/pion/interceptor v0.1.11
+	github.com/pion/interceptor v0.1.12-0.20220518153506-f73686e1904b
 	github.com/pion/interceptor/rfc8888 v0.1.11
-	github.com/pion/interceptor/scream v0.1.5
+	github.com/pion/logging v0.2.2
 	github.com/pion/rtcp v1.2.10-0.20220517170840-4008494612ec
 	github.com/pion/rtp v1.7.13
 	github.com/spf13/cobra v1.3.0
@@ -28,7 +28,6 @@ require (
 	github.com/marten-seemann/qtls-go1-18 v0.1.1 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
-	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -47,3 +46,7 @@ replace github.com/lucas-clemente/quic-go v0.24.0 => github.com/mengelbart/quic-
 replace github.com/pion/interceptor/scream v0.1.5 => github.com/pion/interceptor v0.1.12-0.20220517200054-6506046b9c6f
 
 replace github.com/pion/interceptor/rfc8888 v0.1.11 => github.com/pion/interceptor v0.1.12-0.20220517194555-ddfc2aabce2b
+
+//replace github.com/pion/interceptor/rfc8888 v0.1.11 => ../../../pion/interceptor
+
+replace github.com/mengelbart/scream-go v0.3.1-0.20220517200438-5d7320a6f6c7 => ../../scream-go
