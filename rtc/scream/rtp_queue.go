@@ -45,6 +45,17 @@ func (q *queue) SeqNrOfNextRTP() uint16 {
 	return q.queue.Front().Value.(rtpQueueItem).packet.SequenceNumber
 }
 
+func (q *queue) SeqNrOfLastRTP() uint16 {
+	q.m.RLock()
+	defer q.m.RUnlock()
+
+	if q.queue.Len() <= 0 {
+		return 0
+	}
+
+	return q.queue.Back().Value.(rtpQueueItem).packet.SequenceNumber
+}
+
 func (q *queue) BytesInQueue() int {
 	q.m.Lock()
 	defer q.m.Unlock()
@@ -83,12 +94,14 @@ func (q *queue) GetSizeOfLastFrame() int {
 	return q.queue.Back().Value.(rtpQueueItem).packet.MarshalSize()
 }
 
-func (q *queue) Clear() {
+func (q *queue) Clear() int {
 	q.m.Lock()
 	defer q.m.Unlock()
 
+	size := q.queue.Len()
 	q.bytesInQueue = 0
 	q.queue.Init()
+	return size
 }
 
 func (q *queue) Enqueue(packet *rtp.Packet, ts float64) {

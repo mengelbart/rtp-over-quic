@@ -457,9 +457,10 @@ func (s *SenderInterceptor) GetTargetBitrate(ssrc uint32) (int, error) {
 }
 
 func (s *SenderInterceptor) GetStats() map[string]interface{} {
-	stats := s.tx.GetStatistics(s.getTimeNTP(time.Now()) / 65536.0)
+	stats := s.tx.GetStatistics(s.getTimeNTP(time.Now())/65536.0, false)
 	statSlice := strings.Split(stats, ",")
 	keys := []string{
+		"logTag",
 		"queueDelay",
 		"queueDelayMax",
 		"queueDelayMinAvg",
@@ -469,13 +470,19 @@ func (s *SenderInterceptor) GetStats() map[string]interface{} {
 		"rateTransmittedConnection",
 		"isInFastStart",
 		"rtpQueueDelayStream0",
+		"rtpQueueBytesInQueueStream0",
+		"rtpQueueSizeOfQueueStream0",
 		"targetBitrateStream0",
 		"rateRTPStream0",
+		"packetsRTPStream0",
 		"rateTransmittedStream0",
 		"rateAckedStream0",
 		"rateLostStream0",
 		"rateCEStream0",
+		"packetsCEStream0",
 		"hiSeqAckStream0",
+		"clearedStream0",
+		"packetsLostStream0",
 	}
 	res := make(map[string]interface{})
 	for i := 0; i < len(statSlice) && i < len(keys); i++ {
