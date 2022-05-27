@@ -13,7 +13,7 @@ import (
 	"github.com/pion/interceptor/rfc8888/pkg/rfc8888"
 )
 
-const feedbackInterval = 30 * time.Millisecond
+const feedbackInterval = 10 * time.Millisecond
 
 func registerRTPSenderDumper(r *interceptor.Registry, rtp, rtcp io.Writer) error {
 	rf := &rtpFormatter{}
