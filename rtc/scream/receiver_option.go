@@ -12,10 +12,3 @@ func ReceiverInterval(interval time.Duration) ReceiverOption {
 		return nil
 	}
 }
-
-func ReceiverSetMark(mark bool) ReceiverOption {
-	return func(s *ReceiverInterceptor) error {
-		s.mark = mark
-		return nil
-	}
-}

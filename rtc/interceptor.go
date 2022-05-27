@@ -90,11 +90,10 @@ func registerGCC(r *interceptor.Registry, cb cc.NewPeerConnectionCallback) error
 	return nil
 }
 
-func registerRFC8888(r *interceptor.Registry, mark bool) error {
+func registerRFC8888(r *interceptor.Registry) error {
 	var rx *scream.ReceiverInterceptorFactory
 	rx, err := scream.NewReceiverInterceptor(
 		scream.ReceiverInterval(feedbackInterval),
-		scream.ReceiverSetMark(mark),
 	)
 	if err != nil {
 		return err

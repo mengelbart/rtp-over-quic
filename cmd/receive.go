@@ -23,7 +23,6 @@ var (
 	receiverQLOGDir  string
 	sink             string
 	rtcpFeedback     string
-	rfc8888Mark      bool
 )
 
 func init() {
@@ -39,7 +38,6 @@ func init() {
 	receiveCmd.Flags().StringVar(&receiverRTCPDump, "rtcp-dump", "", "RTCP dump file")
 	receiveCmd.Flags().StringVar(&receiverQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
 	receiveCmd.Flags().StringVar(&rtcpFeedback, "rtcp-feedback", "none", "RTCP Congestion Control Feedback to send ('none', 'rfc8888', 'rfc8888-pion', 'twcc')")
-	receiveCmd.Flags().BoolVarP(&rfc8888Mark, "rfc8888-mark", "m", false, "set RFC 8888 mark to trigger a feedback bug that creates duplicate feedback reports per packet")
 }
 
 var receiveCmd = &cobra.Command{
@@ -65,10 +63,9 @@ func startReceiver() error {
 	defer rtcpDumpfile.Close()
 
 	c := rtc.ReceiverConfig{
-		RTPDump:     rtpDumpFile,
-		RTCPDump:    rtcpDumpfile,
-		Feedback:    getRTCP(rtcpFeedback),
-		RFC8888Mark: rfc8888Mark,
+		RTPDump:  rtpDumpFile,
+		RTCPDump: rtcpDumpfile,
+		Feedback: getRTCP(rtcpFeedback),
 	}
 
 	receiverFactory, err := rtc.GstreamerReceiverFactory(c)

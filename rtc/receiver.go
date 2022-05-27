@@ -49,8 +49,6 @@ type ReceiverConfig struct {
 	RTPDump  io.Writer
 	RTCPDump io.Writer
 	Feedback RTCPFeedback
-
-	RFC8888Mark bool
 }
 
 func GstreamerReceiverFactory(c ReceiverConfig) (ReceiverFactory, error) {
@@ -60,7 +58,7 @@ func GstreamerReceiverFactory(c ReceiverConfig) (ReceiverFactory, error) {
 	}
 	switch c.Feedback {
 	case RTCP_RFC8888:
-		if err := registerRFC8888(&ir, c.RFC8888Mark); err != nil {
+		if err := registerRFC8888(&ir); err != nil {
 			return nil, err
 		}
 	case RTCP_RFC8888_PION:
