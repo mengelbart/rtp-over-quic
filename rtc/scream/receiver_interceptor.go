@@ -24,7 +24,7 @@ func (f *ReceiverInterceptorFactory) NewInterceptor(id string) (interceptor.Inte
 		close:    make(chan struct{}),
 		log:      logging.NewDefaultLoggerFactory().NewLogger("scream_receiver"),
 		screamRx: map[uint32]*scream.Rx{},
-		receive:  make(chan *rtp.Packet),
+		receive:  make(chan *packet),
 		mark:     false,
 	}
 	for _, opt := range f.opts {
@@ -40,6 +40,11 @@ func NewReceiverInterceptor(opts ...ReceiverOption) (*ReceiverInterceptorFactory
 	return &ReceiverInterceptorFactory{opts}, nil
 }
 
+type packet struct {
+	rtp       rtp.Packet
+	timestamp time.Time
+}
+
 // ReceiverInterceptor generates Feedback for SCReAM congestion control
 type ReceiverInterceptor struct {
 	interceptor.NoOp
@@ -51,7 +56,7 @@ type ReceiverInterceptor struct {
 	screamRx   map[uint32]*scream.Rx
 	screamRxMu sync.Mutex
 	interval   time.Duration
-	receive    chan *rtp.Packet
+	receive    chan *packet
 
 	mark bool // only for debugging purpose, setting this triggers a bug in some version s of the SCReAM receiver
 }
@@ -90,6 +95,12 @@ func (r *ReceiverInterceptor) BindRemoteStream(info *interceptor.StreamInfo, rea
 	r.screamRxMu.Unlock()
 
 	return interceptor.RTPReaderFunc(func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
+		timestamp := time.Now()
+		if ts, ok := a["timestamp"]; ok {
+			if t, ok := ts.(time.Time); ok {
+				timestamp = t
+			}
+		}
 		i, attr, err := reader.Read(b, a)
 		if err != nil {
 			return 0, nil, err
@@ -101,7 +112,10 @@ func (r *ReceiverInterceptor) BindRemoteStream(info *interceptor.StreamInfo, rea
 			return 0, nil, err
 		}
 
-		r.receive <- &pkt
+		r.receive <- &packet{
+			rtp:       pkt,
+			timestamp: timestamp,
+		}
 
 		return i, attr, nil
 	})
@@ -133,12 +147,12 @@ func (r *ReceiverInterceptor) loop(rtcpWriter interceptor.RTCPWriter) {
 	case <-r.close:
 		return
 	case pkt := <-r.receive:
-		t := r.getTimeNTP(time.Now())
+		t := r.getTimeNTP(pkt.timestamp)
 
 		r.screamRxMu.Lock()
-		if rx, ok := r.screamRx[pkt.SSRC]; ok {
+		if rx, ok := r.screamRx[pkt.rtp.SSRC]; ok {
 			//fmt.Printf("receive pkt %v at t=%v\n", pkt.SequenceNumber, t)
-			rx.Receive(t, pkt.SSRC, pkt.MarshalSize(), pkt.SequenceNumber, 0)
+			rx.Receive(t, pkt.rtp.SSRC, pkt.rtp.MarshalSize(), pkt.rtp.SequenceNumber, 0)
 		}
 		r.screamRxMu.Unlock()
 	}
@@ -148,12 +162,12 @@ func (r *ReceiverInterceptor) loop(rtcpWriter interceptor.RTCPWriter) {
 	for {
 		select {
 		case pkt := <-r.receive:
-			t := r.getTimeNTP(time.Now())
+			t := r.getTimeNTP(pkt.timestamp)
 
 			r.screamRxMu.Lock()
-			if rx, ok := r.screamRx[pkt.SSRC]; ok {
+			if rx, ok := r.screamRx[pkt.rtp.SSRC]; ok {
 				//fmt.Printf("receive pkt %v at t=%v\n", pkt.SequenceNumber, t)
-				rx.Receive(t, pkt.SSRC, pkt.MarshalSize(), pkt.SequenceNumber, 0)
+				rx.Receive(t, pkt.rtp.SSRC, pkt.rtp.MarshalSize(), pkt.rtp.SequenceNumber, 0)
 			}
 			r.screamRxMu.Unlock()
 

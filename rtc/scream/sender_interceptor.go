@@ -115,6 +115,14 @@ func (s *SenderInterceptor) getTimeNTP(t time.Time) uint64 {
 // change in the future. The returned method will be called once per packet batch.
 func (s *SenderInterceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.RTCPReader {
 	return interceptor.RTCPReaderFunc(func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
+		timestamp := time.Now()
+		if ts, ok := a["timestamp"]; ok {
+			if t, ok := ts.(time.Time); ok {
+				timestamp = t
+			}
+		}
+		t := s.getTimeNTP(timestamp)
+
 		n, attr, err := reader.Read(b, a)
 		if err != nil {
 			return 0, nil, err
@@ -126,7 +134,6 @@ func (s *SenderInterceptor) BindRTCPReader(reader interceptor.RTCPReader) interc
 			return 0, nil, err
 		}
 
-		t := s.getTimeNTP(time.Now())
 		for _, pkt := range pkts {
 
 			var ssrcs []uint32

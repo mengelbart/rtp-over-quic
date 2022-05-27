@@ -48,7 +48,7 @@ type Sender struct {
 	interceptor interceptor.Interceptor
 
 	// additional locally generated rtcp reports channel
-	reports chan []byte
+	reports chan feedback
 
 	done chan struct{}
 	wg   sync.WaitGroup
@@ -173,13 +173,13 @@ func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session Transpo
 		rc.addPipeline(src)
 
 		var ackCallback func(ackedPkt)
-		var reports chan []byte
+		var reports chan feedback
 		if c.LocalRFC8888 {
 			acks := make(chan ackedPkt)
 			ackCallback = func(a ackedPkt) {
 				acks <- a
 			}
-			reports = make(chan []byte)
+			reports = make(chan feedback)
 			fbGenerator := newLocalRFC8888Generator(screamcgo.NewRx(0), session, reports, acks)
 			go fbGenerator.Run(ctx)
 		}
@@ -194,7 +194,7 @@ func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session Transpo
 	}, nil
 }
 
-func newSender(session Transport, interceptor interceptor.Interceptor, reports chan []byte) (*Sender, error) {
+func newSender(session Transport, interceptor interceptor.Interceptor, reports chan feedback) (*Sender, error) {
 	return &Sender{
 		session:     session,
 		flows:       map[uint64]*sendFlow{},
@@ -265,8 +265,13 @@ func (s *Sender) Run() (err error) {
 	}
 }
 
-func (s *Sender) readRTCP(rtcpReader interceptor.RTCPReader, localReports chan []byte) {
-	networkReports := make(chan []byte)
+type feedback struct {
+	buf       []byte
+	timestamp time.Time
+}
+
+func (s *Sender) readRTCP(rtcpReader interceptor.RTCPReader, localReports chan feedback) {
+	networkReports := make(chan feedback)
 
 	receiveFeedbackFunc := func() {
 		buf, err := s.session.ReceiveMessage()
@@ -278,19 +283,22 @@ func (s *Sender) readRTCP(rtcpReader interceptor.RTCPReader, localReports chan [
 			log.Printf("session.ReceiveMessage returned error: %v, exiting RTCP reader\n", err)
 			return
 		}
-		networkReports <- buf
+		networkReports <- feedback{
+			buf:       buf,
+			timestamp: time.Now(),
+		}
 	}
 	go receiveFeedbackFunc()
 
 	for {
-		var report []byte
+		var report feedback
 		select {
 		case report = <-localReports:
 		case report = <-networkReports:
 			go receiveFeedbackFunc()
 		}
 
-		if _, _, err := rtcpReader.Read(report, nil); err != nil {
+		if _, _, err := rtcpReader.Read(report.buf, interceptor.Attributes{"timestamp": report.timestamp}); err != nil {
 			log.Printf("rtcpReader.Read returned error: %v, exiting RTCP reader\n", err)
 			return
 		}
@@ -413,12 +421,12 @@ type Metricer interface {
 type localRFC8888Generator struct {
 	rx        *screamcgo.Rx
 	m         Metricer
-	report    chan<- []byte
+	report    chan<- feedback
 	ackedPkts <-chan ackedPkt
 	t0        float64
 }
 
-func newLocalRFC8888Generator(rx *screamcgo.Rx, m Metricer, report chan<- []byte, acks <-chan ackedPkt) *localRFC8888Generator {
+func newLocalRFC8888Generator(rx *screamcgo.Rx, m Metricer, report chan<- feedback, acks <-chan ackedPkt) *localRFC8888Generator {
 	return &localRFC8888Generator{
 		rx:        rx,
 		m:         m,
@@ -460,7 +468,10 @@ func (f *localRFC8888Generator) Run(ctx context.Context) {
 			buf = []ackedPkt{}
 
 			if ok, fb := f.rx.CreateStandardizedFeedback(lastTS, true); ok {
-				f.report <- fb
+				f.report <- feedback{
+					buf:       fb,
+					timestamp: time.Now(),
+				}
 			}
 
 		case <-ctx.Done():

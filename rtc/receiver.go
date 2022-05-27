@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/lucas-clemente/quic-go/quicvarint"
 	"github.com/pion/interceptor"
@@ -151,6 +152,7 @@ func (r *Receiver) run(ctx context.Context) (err error) {
 				return err
 			}
 			//log.Printf("%v bytes read from connection\n", len(buf))
+			timestamp := time.Now()
 
 			id, err := quicvarint.Read(bytes.NewReader(buf))
 			if err != nil {
@@ -165,7 +167,7 @@ func (r *Receiver) run(ctx context.Context) (err error) {
 				continue
 			}
 			//log.Printf("writing %v bytes to flow %v\n", len(packet), id)
-			if _, _, err := flow.reader.Read(packet, nil); err != nil {
+			if _, _, err := flow.reader.Read(packet, interceptor.Attributes{"timestamp": timestamp}); err != nil {
 				panic(err)
 			}
 			//log.Printf("%v bytes written to pipeline\n", len(buf))
