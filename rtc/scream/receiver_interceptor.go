@@ -140,6 +140,31 @@ func (r *ReceiverInterceptor) Close() error {
 	return nil
 }
 
+func (r *ReceiverInterceptor) loopFeedbackSender(rtcpWriter interceptor.RTCPWriter) {
+	defer r.wg.Done()
+	ticker := time.NewTicker(r.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case now := <-ticker.C:
+			r.screamRxMu.Lock()
+			for _, rx := range r.screamRx {
+				t := r.getTimeNTP(now)
+				if ok, feedback := rx.CreateStandardizedFeedback(t, true); ok {
+					fb := rtcp.RawPacket(feedback)
+					if _, err := rtcpWriter.Write([]rtcp.Packet{&fb}, interceptor.Attributes{}); err != nil {
+						r.log.Warnf("failed sending scream feedback report: %+v", err)
+					}
+				}
+			}
+			r.screamRxMu.Unlock()
+		case <-r.close:
+			return
+		}
+	}
+}
+
 func (r *ReceiverInterceptor) loop(rtcpWriter interceptor.RTCPWriter) {
 	defer r.wg.Done()
 
@@ -157,8 +182,10 @@ func (r *ReceiverInterceptor) loop(rtcpWriter interceptor.RTCPWriter) {
 		r.screamRxMu.Unlock()
 	}
 
-	ticker := time.NewTicker(r.interval)
-	defer ticker.Stop()
+	r.wg.Add(1)
+	go r.loopFeedbackSender(rtcpWriter)
+
+	lastFeedback := time.Now()
 	for {
 		select {
 		case pkt := <-r.receive:
@@ -171,24 +198,22 @@ func (r *ReceiverInterceptor) loop(rtcpWriter interceptor.RTCPWriter) {
 			}
 			r.screamRxMu.Unlock()
 
-		case <-ticker.C:
-			func() {
+			now := time.Now()
+			if now.Sub(lastFeedback) > r.interval {
 				r.screamRxMu.Lock()
-
 				for _, rx := range r.screamRx {
-					// TODO: Check meaning of isMark
-					t := r.getTimeNTP(time.Now())
-					if ok, feedback := rx.CreateStandardizedFeedback(t, r.mark); ok {
-						//fmt.Printf("sent feedback at %v\n", t)
+					t := r.getTimeNTP(now)
+					if ok, feedback := rx.CreateStandardizedFeedback(t, pkt.rtp.Marker); ok {
 						fb := rtcp.RawPacket(feedback)
 						if _, err := rtcpWriter.Write([]rtcp.Packet{&fb}, interceptor.Attributes{}); err != nil {
 							r.log.Warnf("failed sending scream feedback report: %+v", err)
 						}
 					}
 				}
-
 				r.screamRxMu.Unlock()
-			}()
+				lastFeedback = now
+			}
+
 		case <-r.close:
 			return
 		}
