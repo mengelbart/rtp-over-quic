@@ -347,6 +347,9 @@ func connectUDP() (*udpClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err = rtc.SetReceiveBuffer(conn); err != nil {
+		return nil, err
+	}
 	return &udpClient{
 		conn: conn,
 	}, nil
