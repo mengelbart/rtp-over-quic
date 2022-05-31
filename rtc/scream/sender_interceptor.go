@@ -249,7 +249,6 @@ func (s *SenderInterceptor) BindLocalStream(info *interceptor.StreamInfo, writer
 		rtpQueue.Enqueue(pkt, float64(t)/65536.0)
 		size := pkt.MarshalSize()
 		s.m.Lock()
-		//fmt.Printf("newMediaFrame at t=%v\n", t)
 		s.tx.NewMediaFrame(t, header.SSRC, size)
 		s.m.Unlock()
 		localStream.newFrame <- struct{}{}
@@ -340,18 +339,15 @@ func (s *SenderInterceptor) loopPacingTimer(writer interceptor.RTPWriter, ssrc u
 		select {
 		case <-stream.newFeedback:
 			if timerSet {
-				fmt.Println("new feedback skipped")
 				continue
 			}
 		case <-stream.newFrame:
 			if timerSet {
-				fmt.Println("new frame skipped")
 				continue
 			}
 		case <-timer:
 			timerSet = false
 			timer = make(chan struct{})
-			fmt.Println("timer reset")
 		case <-s.close:
 			return
 		}
@@ -390,7 +386,6 @@ func (s *SenderInterceptor) loopPacingTimer(writer interceptor.RTPWriter, ssrc u
 			if transmit > 1e-3 {
 				go func() {
 					d := time.Duration(1000*transmit) * time.Millisecond
-					fmt.Printf("setting timer to %v\n", d)
 					time.AfterFunc(d, func() {
 						close(timer)
 					})
@@ -399,7 +394,6 @@ func (s *SenderInterceptor) loopPacingTimer(writer interceptor.RTPWriter, ssrc u
 				break
 			}
 		}
-		fmt.Printf("sent %v packets\n", count)
 	}
 }
 
