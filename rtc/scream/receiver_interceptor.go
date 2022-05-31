@@ -152,7 +152,10 @@ func (r *ReceiverInterceptor) loopFeedbackSender(rtcpWriter interceptor.RTCPWrit
 			for _, rx := range r.screamRx {
 				t := r.getTimeNTP(now)
 				if ok, feedback := rx.CreateStandardizedFeedback(t, true); ok {
-					fb := rtcp.RawPacket(feedback)
+					var fb rtcp.CCFeedbackReport
+					if err := fb.Unmarshal(feedback); err != nil {
+						r.log.Warnf("failed to unmarshal scream feedback report: %+v", err)
+					}
 					if _, err := rtcpWriter.Write([]rtcp.Packet{&fb}, interceptor.Attributes{}); err != nil {
 						r.log.Warnf("failed sending scream feedback report: %+v", err)
 					}
@@ -204,7 +207,10 @@ func (r *ReceiverInterceptor) loop(rtcpWriter interceptor.RTCPWriter) {
 				for _, rx := range r.screamRx {
 					t := r.getTimeNTP(now)
 					if ok, feedback := rx.CreateStandardizedFeedback(t, pkt.rtp.Marker); ok {
-						fb := rtcp.RawPacket(feedback)
+						var fb rtcp.CCFeedbackReport
+						if err := fb.Unmarshal(feedback); err != nil {
+							r.log.Warnf("failed to unmarshal scream feedback report: %+v", err)
+						}
 						if _, err := rtcpWriter.Write([]rtcp.Packet{&fb}, interceptor.Attributes{}); err != nil {
 							r.log.Warnf("failed sending scream feedback report: %+v", err)
 						}
