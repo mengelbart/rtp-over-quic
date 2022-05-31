@@ -362,7 +362,7 @@ func (c *udpClient) SendMessage(msg []byte, _ func(error), _ func(bool)) error {
 }
 
 func (c *udpClient) ReceiveMessage() ([]byte, error) {
-	buf := make([]byte, 1400)
+	buf := make([]byte, 1500)
 	n, err := c.conn.Read(buf)
 	return buf[:n], err
 }
