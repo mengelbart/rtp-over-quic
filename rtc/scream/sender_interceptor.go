@@ -386,9 +386,11 @@ func (s *SenderInterceptor) loopPacingTimer(writer interceptor.RTPWriter, ssrc u
 			if transmit > 1e-3 {
 				go func() {
 					d := time.Duration(1000*transmit) * time.Millisecond
-					time.AfterFunc(d, func() {
+					t := time.AfterFunc(d, func() {
 						close(timer)
 					})
+					<-timer
+					t.Stop()
 				}()
 				timerSet = true
 				break
