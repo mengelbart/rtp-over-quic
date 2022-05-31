@@ -307,6 +307,8 @@ github.com/mengelbart/gst-go v0.0.0-20220122175935-31980159bd82 h1:BUMjxJUhfAkUM
 github.com/mengelbart/gst-go v0.0.0-20220122175935-31980159bd82/go.mod h1:J9js686VBdevB5wQODy0ZTDtUsMipxoSpedYVXsJ1vU=
 github.com/mengelbart/quic-go v0.7.1-0.20220513091845-f978d053c86f h1:v06Sjq2hLmEudi3uixtMqJT5Vc8+s3Li/G3DvZi9TgU=
 github.com/mengelbart/quic-go v0.7.1-0.20220513091845-f978d053c86f/go.mod h1:AzgQoPda7N+3IqMMMkywBKggIFo2KT6pfnlrQ2QieeI=
+github.com/mengelbart/scream-go v0.4.0 h1:XrjtTXDZw38yZAVRJI5c4Ysz1gjcFwj62mdOqTVQRE0=
+github.com/mengelbart/scream-go v0.4.0/go.mod h1:Yre6kUFLW62SKaIjBBZF/E93fEBqcCqn6bZyrjljd5k=
 github.com/mengelbart/syncodec v0.0.0-20220105132658-94ec57e63a65 h1:YesVi8KQzZ9tFu6p3NTU77xA3/8N2C11IDuk/7sV5uI=
 github.com/mengelbart/syncodec v0.0.0-20220105132658-94ec57e63a65/go.mod h1:xSNXCRAUe6VZ/3cIYLvelP33gCTh3PLVbckdgcCeV+U=
 github.com/microcosm-cc/bluemonday v1.0.1/go.mod h1:hsXNsILzKxV+sX77C5b8FSuKF00vh2OMYv+xgHpAMF4=
