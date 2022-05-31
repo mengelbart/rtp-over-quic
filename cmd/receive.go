@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"syscall"
 
 	gstsink "github.com/mengelbart/gst-go/gstreamer-sink"
@@ -15,14 +16,15 @@ import (
 )
 
 var (
-	receiveTransport string
-	receiveAddr      string
-	receiverRTPDump  string
-	receiverRTCPDump string
-	receiverCodec    string
-	receiverQLOGDir  string
-	sink             string
-	rtcpFeedback     string
+	receiveTransport   string
+	receiveAddr        string
+	receiverRTPDump    string
+	receiverRTCPDump   string
+	receiverCodec      string
+	receiverQLOGDir    string
+	sink               string
+	rtcpFeedback       string
+	receiverCPUProfile string
 )
 
 func init() {
@@ -38,11 +40,20 @@ func init() {
 	receiveCmd.Flags().StringVar(&receiverRTCPDump, "rtcp-dump", "", "RTCP dump file")
 	receiveCmd.Flags().StringVar(&receiverQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
 	receiveCmd.Flags().StringVar(&rtcpFeedback, "rtcp-feedback", "none", "RTCP Congestion Control Feedback to send ('none', 'rfc8888', 'rfc8888-pion', 'twcc')")
+	receiveCmd.Flags().StringVar(&receiverCPUProfile, "pprof", "", "CPU profile file for pprof")
 }
 
 var receiveCmd = &cobra.Command{
 	Use: "receive",
 	Run: func(_ *cobra.Command, _ []string) {
+		if receiverCPUProfile != "" {
+			f, err := os.Create(receiverCPUProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			pprof.StartCPUProfile(f)
+			defer pprof.StopCPUProfile()
+		}
 		if err := startReceiver(); err != nil {
 			log.Fatal(err)
 		}

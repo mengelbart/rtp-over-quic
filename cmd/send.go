@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"strings"
 	"syscall"
 	"time"
@@ -25,21 +26,22 @@ import (
 )
 
 var (
-	sendTransport  string
-	sendAddr       string
-	senderRTPDump  string
-	senderRTCPDump string
-	senderCodec    string
-	source         string
-	ccDump         string
-	senderQLOGDir  string
-	tcpCongAlg     string
-	rtpCC          string
-	screamPacer    int
-	quicCC         string
-	sendStream     bool
-	localRFC8888   bool
-	keyLogFile     string
+	sendTransport    string
+	sendAddr         string
+	senderRTPDump    string
+	senderRTCPDump   string
+	senderCodec      string
+	source           string
+	ccDump           string
+	senderQLOGDir    string
+	tcpCongAlg       string
+	rtpCC            string
+	screamPacer      int
+	quicCC           string
+	sendStream       bool
+	localRFC8888     bool
+	keyLogFile       string
+	senderCPUProfile string
 )
 
 func init() {
@@ -62,11 +64,20 @@ func init() {
 	sendCmd.Flags().StringVar(&quicCC, "quic-cc", "none", "QUIC congestion control algorithm. ('none', 'newreno')")
 	sendCmd.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
 	sendCmd.Flags().StringVar(&keyLogFile, "keylogfile", "", "TLS keys for decrypting traffic e.g. using wireshark")
+	sendCmd.Flags().StringVar(&senderCPUProfile, "pprof", "", "CPU profile file for pprof")
 }
 
 var sendCmd = &cobra.Command{
 	Use: "send",
 	Run: func(_ *cobra.Command, _ []string) {
+		if senderCPUProfile != "" {
+			f, err := os.Create(senderCPUProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			pprof.StartCPUProfile(f)
+			defer pprof.StopCPUProfile()
+		}
 		if err := startSender(); err != nil {
 			log.Fatal(err)
 		}
