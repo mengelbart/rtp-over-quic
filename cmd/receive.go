@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/pprof"
 	"syscall"
 
@@ -16,15 +18,21 @@ import (
 )
 
 var (
-	receiveTransport   string
-	receiveAddr        string
-	receiverRTPDump    string
-	receiverRTCPDump   string
-	receiverCodec      string
-	receiverQLOGDir    string
-	sink               string
-	rtcpFeedback       string
-	receiverCPUProfile string
+	receiveTransport string
+	receiveAddr      string
+	receiverRTPDump  string
+	receiverRTCPDump string
+	receiverCodec    string
+	receiverQLOGDir  string
+	sink             string
+	rtcpFeedback     string
+
+	receiverCPUProfile       string
+	receiverGoroutineProfile string
+	receiverHeapProfile      string
+	receiverAllocsProfile    string
+	receiverBlockProfile     string
+	receiverMutexProfile     string
 )
 
 func init() {
@@ -40,7 +48,13 @@ func init() {
 	receiveCmd.Flags().StringVar(&receiverRTCPDump, "rtcp-dump", "", "RTCP dump file")
 	receiveCmd.Flags().StringVar(&receiverQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
 	receiveCmd.Flags().StringVar(&rtcpFeedback, "rtcp-feedback", "none", "RTCP Congestion Control Feedback to send ('none', 'rfc8888', 'rfc8888-pion', 'twcc')")
-	receiveCmd.Flags().StringVar(&receiverCPUProfile, "pprof", "", "CPU profile file for pprof")
+
+	receiveCmd.Flags().StringVar(&receiverCPUProfile, "pprof-cpu", "", "Create pprof CPU profile with given filename")
+	receiveCmd.Flags().StringVar(&receiverGoroutineProfile, "pprof-goroutine", "", "Create pprof 'goroutine' profile with given filename")
+	receiveCmd.Flags().StringVar(&receiverHeapProfile, "pprof-heap", "", "Create pprof 'heap' profile with given filename")
+	receiveCmd.Flags().StringVar(&receiverAllocsProfile, "pprof-allocs", "", "Create pprof 'allocs' profile with given filename")
+	receiveCmd.Flags().StringVar(&receiverBlockProfile, "pprof-block", "", "Create pprof 'block' profile with given filename")
+	receiveCmd.Flags().StringVar(&receiverMutexProfile, "pprof-mutex", "", "Create pprof 'mutex' profile with given filename")
 }
 
 var receiveCmd = &cobra.Command{
@@ -53,6 +67,43 @@ var receiveCmd = &cobra.Command{
 			}
 			pprof.StartCPUProfile(f)
 			defer pprof.StopCPUProfile()
+		}
+		if receiverGoroutineProfile != "" {
+			f, err := os.Create(receiverGoroutineProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer pprof.Lookup("goroutine").WriteTo(f, 0)
+		}
+		if receiverHeapProfile != "" {
+			f, err := os.Create(receiverHeapProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer pprof.Lookup("heap").WriteTo(f, 0)
+		}
+		if receiverAllocsProfile != "" {
+			f, err := os.Create(receiverAllocsProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer pprof.Lookup("allocs").WriteTo(f, 0)
+		}
+		if receiverBlockProfile != "" {
+			runtime.SetBlockProfileRate(1)
+			f, err := os.Create(receiverBlockProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer pprof.Lookup("block").WriteTo(f, 0)
+		}
+		if receiverMutexProfile != "" {
+			runtime.SetMutexProfileFraction(1)
+			f, err := os.Create(receiverMutexProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer pprof.Lookup("mutex").WriteTo(f, 0)
 		}
 		if err := startReceiver(); err != nil {
 			log.Fatal(err)
@@ -194,6 +245,22 @@ func discardingSinkFactory() rtc.MediaSinkFactory {
 	}
 }
 
+type fileCloser struct {
+	f   *os.File
+	buf *bufio.Writer
+}
+
+func (f *fileCloser) Write(buf []byte) (int, error) {
+	return f.f.Write(buf)
+}
+
+func (f *fileCloser) Close() error {
+	if err := f.buf.Flush(); err != nil {
+		log.Printf("failed to flush: %v\n", err)
+	}
+	return f.f.Close()
+}
+
 func getLogFile(file string) (io.WriteCloser, error) {
 	if len(file) == 0 {
 		return nopCloser{io.Discard}, nil
@@ -205,5 +272,10 @@ func getLogFile(file string) (io.WriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	return fd, nil
+	bufwriter := bufio.NewWriterSize(fd, 4096)
+
+	return &fileCloser{
+		f:   fd,
+		buf: bufwriter,
+	}, nil
 }

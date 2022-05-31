@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/pprof"
 	"strings"
 	"syscall"
@@ -26,22 +27,28 @@ import (
 )
 
 var (
-	sendTransport    string
-	sendAddr         string
-	senderRTPDump    string
-	senderRTCPDump   string
-	senderCodec      string
-	source           string
-	ccDump           string
-	senderQLOGDir    string
-	tcpCongAlg       string
-	rtpCC            string
-	screamPacer      int
-	quicCC           string
-	sendStream       bool
-	localRFC8888     bool
-	keyLogFile       string
-	senderCPUProfile string
+	sendTransport  string
+	sendAddr       string
+	senderRTPDump  string
+	senderRTCPDump string
+	senderCodec    string
+	source         string
+	ccDump         string
+	senderQLOGDir  string
+	tcpCongAlg     string
+	rtpCC          string
+	screamPacer    int
+	quicCC         string
+	sendStream     bool
+	localRFC8888   bool
+	keyLogFile     string
+
+	senderCPUProfile       string
+	senderGoroutineProfile string
+	senderHeapProfile      string
+	senderAllocsProfile    string
+	senderBlockProfile     string
+	senderMutexProfile     string
 )
 
 func init() {
@@ -64,7 +71,13 @@ func init() {
 	sendCmd.Flags().StringVar(&quicCC, "quic-cc", "none", "QUIC congestion control algorithm. ('none', 'newreno')")
 	sendCmd.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
 	sendCmd.Flags().StringVar(&keyLogFile, "keylogfile", "", "TLS keys for decrypting traffic e.g. using wireshark")
-	sendCmd.Flags().StringVar(&senderCPUProfile, "pprof", "", "CPU profile file for pprof")
+
+	sendCmd.Flags().StringVar(&senderCPUProfile, "pprof-cpu", "", "Create pprof CPU profile with given filename")
+	sendCmd.Flags().StringVar(&senderGoroutineProfile, "pprof-goroutine", "", "Create pprof 'goroutine' profile with given filename")
+	sendCmd.Flags().StringVar(&senderHeapProfile, "pprof-heap", "", "Create pprof 'heap' profile with given filename")
+	sendCmd.Flags().StringVar(&senderAllocsProfile, "pprof-allocs", "", "Create pprof 'allocs' profile with given filename")
+	sendCmd.Flags().StringVar(&senderBlockProfile, "pprof-block", "", "Create pprof 'block' profile with given filename")
+	sendCmd.Flags().StringVar(&senderMutexProfile, "pprof-mutex", "", "Create pprof 'mutex' profile with given filename")
 }
 
 var sendCmd = &cobra.Command{
@@ -77,6 +90,43 @@ var sendCmd = &cobra.Command{
 			}
 			pprof.StartCPUProfile(f)
 			defer pprof.StopCPUProfile()
+		}
+		if senderGoroutineProfile != "" {
+			f, err := os.Create(senderGoroutineProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer pprof.Lookup("goroutine").WriteTo(f, 0)
+		}
+		if senderHeapProfile != "" {
+			f, err := os.Create(senderHeapProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer pprof.Lookup("heap").WriteTo(f, 0)
+		}
+		if senderAllocsProfile != "" {
+			f, err := os.Create(senderAllocsProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer pprof.Lookup("allocs").WriteTo(f, 0)
+		}
+		if senderBlockProfile != "" {
+			runtime.SetBlockProfileRate(1)
+			f, err := os.Create(senderBlockProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer pprof.Lookup("block").WriteTo(f, 0)
+		}
+		if senderMutexProfile != "" {
+			runtime.SetMutexProfileFraction(1)
+			f, err := os.Create(senderMutexProfile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer pprof.Lookup("mutex").WriteTo(f, 0)
 		}
 		if err := startSender(); err != nil {
 			log.Fatal(err)
