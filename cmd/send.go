@@ -21,7 +21,6 @@ import (
 	"github.com/lucas-clemente/quic-go/qlog"
 	gstsrc "github.com/mengelbart/gst-go/gstreamer-src"
 	"github.com/mengelbart/rtp-over-quic/rtc"
-	"github.com/mengelbart/rtp-over-quic/rtc/scream"
 	"github.com/mengelbart/syncodec"
 	"github.com/spf13/cobra"
 )
@@ -37,7 +36,6 @@ var (
 	senderQLOGDir  string
 	tcpCongAlg     string
 	rtpCC          string
-	screamPacer    int
 	quicCC         string
 	sendStream     bool
 	localRFC8888   bool
@@ -66,7 +64,6 @@ func init() {
 	sendCmd.Flags().StringVar(&senderQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
 	sendCmd.Flags().StringVar(&tcpCongAlg, "tcp-congestion", "reno", "TCP Congestion control algorithm to use, only when --transport is tcp")
 	sendCmd.Flags().StringVar(&rtpCC, "rtp-cc", "none", "RTP congestion control algorithm. ('none', 'scream', 'gcc')")
-	sendCmd.Flags().IntVar(&screamPacer, "scream-pacer", 0, "SCReAM pacer: 0: active wait, 1: active wait and ignore pacing, 2: use pacing timer")
 	sendCmd.Flags().BoolVar(&localRFC8888, "local-rfc8888", false, "Generate local RFC 8888 feedback")
 	sendCmd.Flags().StringVar(&quicCC, "quic-cc", "none", "QUIC congestion control algorithm. ('none', 'newreno')")
 	sendCmd.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
@@ -160,7 +157,6 @@ func startSender() error {
 		CCDump:       ccDumpFile,
 		CC:           getCC(rtpCC),
 		LocalRFC8888: localRFC8888,
-		SCReAMPacer:  scream.PacerLoopAlgorithm(screamPacer),
 	}
 
 	var transport rtc.Transport

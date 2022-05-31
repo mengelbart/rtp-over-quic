@@ -111,12 +111,11 @@ func registerRFC8888Pion(r *interceptor.Registry) error {
 	return nil
 }
 
-func registerSCReAM(r *interceptor.Registry, cb scream.NewPeerConnectionCallback, algo scream.PacerLoopAlgorithm) error {
+func registerSCReAM(r *interceptor.Registry, cb scream.NewPeerConnectionCallback) error {
 	var tx *scream.SenderInterceptorFactory
 	tx, err := scream.NewSenderInterceptor(
 		scream.InitialBitrate(100_000),
 		scream.MinBitrate(100_000),
-		scream.PacingAlgorithm(algo),
 	)
 	if err != nil {
 		return err

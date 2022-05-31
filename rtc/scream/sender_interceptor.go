@@ -14,14 +14,6 @@ import (
 	"github.com/pion/rtp"
 )
 
-type PacerLoopAlgorithm int
-
-const (
-	ActiveWait PacerLoopAlgorithm = iota
-	IngorePacingActiveWait
-	PacingTimer
-)
-
 type BandwidthEstimator interface {
 	GetTargetBitrate(ssrc uint32) (int, error)
 	GetStats() map[string]interface{}
@@ -74,7 +66,6 @@ func (f *SenderInterceptorFactory) NewInterceptor(id string) (interceptor.Interc
 		minBitrate:     1_000,
 		initialBitrate: 100_000,
 		maxBitrate:     2048000000,
-		algo:           ActiveWait,
 	}
 	for _, opt := range f.opts {
 		if err := opt(s); err != nil {
@@ -103,8 +94,6 @@ type SenderInterceptor struct {
 	minBitrate     float64
 	initialBitrate float64
 	maxBitrate     float64
-
-	algo PacerLoopAlgorithm
 }
 
 func (s *SenderInterceptor) getTimeNTP(t time.Time) uint64 {
@@ -229,14 +218,7 @@ func (s *SenderInterceptor) BindLocalStream(info *interceptor.StreamInfo, writer
 
 	s.tx.RegisterNewStream(rtpQueue, info.SSRC, priority, minBitrate, startBitrate, maxBitrate)
 
-	switch s.algo {
-	case ActiveWait:
-		go s.loopActiveWait(writer, info.SSRC)
-	case IngorePacingActiveWait:
-		go s.loopIgnorePacingActiveWait(writer, info.SSRC)
-	case PacingTimer:
-		go s.loopPacingTimer(writer, info.SSRC)
-	}
+	go s.loopPacingTimer(writer, info.SSRC)
 
 	return interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
 		t := s.getTimeNTP(time.Now())
@@ -276,52 +258,6 @@ func (s *SenderInterceptor) Close() error {
 		close(s.close)
 	}
 	return nil
-}
-
-func (s *SenderInterceptor) loopActiveWait(writer interceptor.RTPWriter, ssrc uint32) {
-	defer s.wg.Done()
-	s.rtpStreamsMu.Lock()
-	stream := s.rtpStreams[ssrc]
-	s.rtpStreamsMu.Unlock()
-
-	s.log.Infof("start send loop for ssrc: %v\n", ssrc)
-	defer s.log.Infof("leave send loop for ssrc: %v", ssrc)
-
-	for {
-		select {
-		case <-stream.newFrame:
-		case <-stream.newFeedback:
-		case <-s.close:
-			return
-		default:
-		}
-		if stream.queue.SizeOfQueue() <= 0 {
-			continue
-		}
-
-		s.m.Lock()
-		transmit := s.tx.IsOkToTransmit(s.getTimeNTP(time.Now()), ssrc)
-		s.m.Unlock()
-		switch {
-		case transmit == -1:
-			// no packets or CWND too small
-			continue
-
-		case transmit <= 1e-3:
-			// send packet
-			packet := stream.queue.Dequeue()
-			if packet == nil {
-				continue
-			}
-			// TODO: Forward attributes from above?
-			if _, err := writer.Write(&packet.Header, packet.Payload, interceptor.Attributes{}); err != nil {
-				s.log.Warnf("failed sending RTP packet: %+v", err)
-			}
-			s.m.Lock()
-			s.tx.AddTransmitted(s.getTimeNTP(time.Now()), ssrc, packet.MarshalSize(), packet.SequenceNumber, packet.Marker)
-			s.m.Unlock()
-		}
-	}
 }
 
 func (s *SenderInterceptor) loopPacingTimer(writer interceptor.RTPWriter, ssrc uint32) {
@@ -395,52 +331,6 @@ func (s *SenderInterceptor) loopPacingTimer(writer interceptor.RTPWriter, ssrc u
 				timerSet = true
 				break
 			}
-		}
-	}
-}
-
-func (s *SenderInterceptor) loopIgnorePacingActiveWait(writer interceptor.RTPWriter, ssrc uint32) {
-	defer s.wg.Done()
-	s.rtpStreamsMu.Lock()
-	stream := s.rtpStreams[ssrc]
-	s.rtpStreamsMu.Unlock()
-
-	s.log.Infof("start send loop for ssrc: %v\n", ssrc)
-	defer s.log.Infof("leave send loop for ssrc: %v", ssrc)
-
-	for {
-		select {
-		case <-stream.newFrame:
-		case <-stream.newFeedback:
-		case <-s.close:
-			return
-		default:
-		}
-		if stream.queue.SizeOfQueue() <= 0 {
-			continue
-		}
-
-		s.m.Lock()
-		transmit := s.tx.IsOkToTransmit(s.getTimeNTP(time.Now()), ssrc)
-		s.m.Unlock()
-		switch transmit {
-		case -1:
-			// no packets or CWND too small
-			continue
-
-		default:
-			// send packet
-			packet := stream.queue.Dequeue()
-			if packet == nil {
-				continue
-			}
-			// TODO: Forward attributes from above?
-			if _, err := writer.Write(&packet.Header, packet.Payload, interceptor.Attributes{}); err != nil {
-				s.log.Warnf("failed sending RTP packet: %+v", err)
-			}
-			s.m.Lock()
-			s.tx.AddTransmitted(s.getTimeNTP(time.Now()), ssrc, packet.MarshalSize(), packet.SequenceNumber, packet.Marker)
-			s.m.Unlock()
 		}
 	}
 }

@@ -60,7 +60,6 @@ type SenderConfig struct {
 	CCDump       io.Writer
 	CC           RTPCongestionControlAlgo
 	LocalRFC8888 bool
-	SCReAMPacer  scream.PacerLoopAlgorithm
 }
 
 type rateController struct {
@@ -152,7 +151,7 @@ func GstreamerSenderFactory(ctx context.Context, c SenderConfig, session Transpo
 	var rc rateController
 	switch c.CC {
 	case RTP_CC_SCREAM:
-		if err := registerSCReAM(&ir, rc.screamLoopFactory(ctx, c.CCDump), c.SCReAMPacer); err != nil {
+		if err := registerSCReAM(&ir, rc.screamLoopFactory(ctx, c.CCDump)); err != nil {
 			return nil, err
 		}
 	case RTP_CC_GCC:

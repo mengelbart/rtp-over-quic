@@ -40,10 +40,3 @@ func MaxBitrate(rate float64) SenderOption {
 		return nil
 	}
 }
-
-func PacingAlgorithm(algo PacerLoopAlgorithm) SenderOption {
-	return func(s *SenderInterceptor) error {
-		s.algo = algo
-		return nil
-	}
-}
