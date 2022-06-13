@@ -10,8 +10,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"runtime"
-	"runtime/pprof"
 	"strings"
 	"syscall"
 	"time"
@@ -54,77 +52,44 @@ func init() {
 
 	rootCmd.AddCommand(sendCmd)
 
-	sendCmd.Flags().StringVar(&sendTransport, "transport", "quic", "Transport protocol to use: quic, udp or tcp")
-	sendCmd.Flags().StringVarP(&sendAddr, "addr", "a", ":4242", "QUIC server address")
-	sendCmd.Flags().StringVarP(&senderCodec, "codec", "c", "h264", "Media codec")
-	sendCmd.Flags().StringVar(&source, "source", "videotestsrc", "Media source")
-	sendCmd.Flags().StringVar(&senderRTPDump, "rtp-dump", "", "RTP dump file, 'stdout' for Stdout")
-	sendCmd.Flags().StringVar(&senderRTCPDump, "rtcp-dump", "", "RTCP dump file, 'stdout' for Stdout")
-	sendCmd.Flags().StringVar(&ccDump, "cc-dump", "", "Congestion Control log file, use 'stdout' for Stdout")
-	sendCmd.Flags().StringVar(&senderQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
-	sendCmd.Flags().StringVar(&tcpCongAlg, "tcp-congestion", "reno", "TCP Congestion control algorithm to use, only when --transport is tcp")
-	sendCmd.Flags().StringVar(&rtpCC, "rtp-cc", "none", "RTP congestion control algorithm. ('none', 'scream', 'gcc')")
-	sendCmd.Flags().BoolVar(&localRFC8888, "local-rfc8888", false, "Generate local RFC 8888 feedback")
-	sendCmd.Flags().StringVar(&quicCC, "quic-cc", "none", "QUIC congestion control algorithm. ('none', 'newreno')")
-	sendCmd.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
-	sendCmd.Flags().StringVar(&keyLogFile, "keylogfile", "", "TLS keys for decrypting traffic e.g. using wireshark")
+	sendCmd2.Flags().StringVar(&sendTransport, "transport", "quic", "Transport protocol to use: quic, udp or tcp")
+	sendCmd2.Flags().StringVarP(&sendAddr, "addr", "a", ":4242", "QUIC server address")
+	sendCmd2.Flags().StringVarP(&senderCodec, "codec", "c", "h264", "Media codec")
+	sendCmd2.Flags().StringVar(&source, "source", "videotestsrc", "Media source")
+	sendCmd2.Flags().StringVar(&senderRTPDump, "rtp-dump", "", "RTP dump file, 'stdout' for Stdout")
+	sendCmd2.Flags().StringVar(&senderRTCPDump, "rtcp-dump", "", "RTCP dump file, 'stdout' for Stdout")
+	sendCmd2.Flags().StringVar(&ccDump, "cc-dump", "", "Congestion Control log file, use 'stdout' for Stdout")
+	sendCmd2.Flags().StringVar(&senderQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
+	sendCmd2.Flags().StringVar(&tcpCongAlg, "tcp-congestion", "reno", "TCP Congestion control algorithm to use, only when --transport is tcp")
+	sendCmd2.Flags().StringVar(&rtpCC, "rtp-cc", "none", "RTP congestion control algorithm. ('none', 'scream', 'gcc')")
+	sendCmd2.Flags().BoolVar(&localRFC8888, "local-rfc8888", false, "Generate local RFC 8888 feedback")
+	sendCmd2.Flags().StringVar(&quicCC, "quic-cc", "none", "QUIC congestion control algorithm. ('none', 'newreno')")
+	sendCmd2.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
+	sendCmd2.Flags().StringVar(&keyLogFile, "keylogfile", "", "TLS keys for decrypting traffic e.g. using wireshark")
 
-	sendCmd.Flags().StringVar(&senderCPUProfile, "pprof-cpu", "", "Create pprof CPU profile with given filename")
-	sendCmd.Flags().StringVar(&senderGoroutineProfile, "pprof-goroutine", "", "Create pprof 'goroutine' profile with given filename")
-	sendCmd.Flags().StringVar(&senderHeapProfile, "pprof-heap", "", "Create pprof 'heap' profile with given filename")
-	sendCmd.Flags().StringVar(&senderAllocsProfile, "pprof-allocs", "", "Create pprof 'allocs' profile with given filename")
-	sendCmd.Flags().StringVar(&senderBlockProfile, "pprof-block", "", "Create pprof 'block' profile with given filename")
-	sendCmd.Flags().StringVar(&senderMutexProfile, "pprof-mutex", "", "Create pprof 'mutex' profile with given filename")
+	sendCmd2.Flags().StringVar(&senderCPUProfile, "pprof-cpu", "", "Create pprof CPU profile with given filename")
+	sendCmd2.Flags().StringVar(&senderGoroutineProfile, "pprof-goroutine", "", "Create pprof 'goroutine' profile with given filename")
+	sendCmd2.Flags().StringVar(&senderHeapProfile, "pprof-heap", "", "Create pprof 'heap' profile with given filename")
+	sendCmd2.Flags().StringVar(&senderAllocsProfile, "pprof-allocs", "", "Create pprof 'allocs' profile with given filename")
+	sendCmd2.Flags().StringVar(&senderBlockProfile, "pprof-block", "", "Create pprof 'block' profile with given filename")
+	sendCmd2.Flags().StringVar(&senderMutexProfile, "pprof-mutex", "", "Create pprof 'mutex' profile with given filename")
 }
 
 var sendCmd = &cobra.Command{
 	Use: "send",
 	Run: func(_ *cobra.Command, _ []string) {
-		if senderCPUProfile != "" {
-			f, err := os.Create(senderCPUProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			pprof.StartCPUProfile(f)
-			defer pprof.StopCPUProfile()
+		done, err := setupProfiling(
+			senderCPUProfile,
+			senderGoroutineProfile,
+			senderHeapProfile,
+			senderAllocsProfile,
+			senderBlockProfile,
+			senderMutexProfile,
+		)
+		if err != nil {
+			log.Fatal(err)
 		}
-		if senderGoroutineProfile != "" {
-			f, err := os.Create(senderGoroutineProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer pprof.Lookup("goroutine").WriteTo(f, 0)
-		}
-		if senderHeapProfile != "" {
-			f, err := os.Create(senderHeapProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer pprof.Lookup("heap").WriteTo(f, 0)
-		}
-		if senderAllocsProfile != "" {
-			f, err := os.Create(senderAllocsProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer pprof.Lookup("allocs").WriteTo(f, 0)
-		}
-		if senderBlockProfile != "" {
-			runtime.SetBlockProfileRate(1)
-			f, err := os.Create(senderBlockProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer pprof.Lookup("block").WriteTo(f, 0)
-		}
-		if senderMutexProfile != "" {
-			runtime.SetMutexProfileFraction(1)
-			f, err := os.Create(senderMutexProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer pprof.Lookup("mutex").WriteTo(f, 0)
-		}
+		defer done()
 		if err := startSender(); err != nil {
 			log.Fatal(err)
 		}
@@ -176,8 +141,8 @@ func startSender() error {
 		}
 
 		var session quic.Connection
-		var tracer *rtc.RTTTracer
-		session, tracer, err = connectQUIC(qlogWriter, keyLogger)
+		tracer := rtc.NewTracer()
+		session, err = connectQUIC(qlogWriter, tracer, keyLogger)
 		if err != nil {
 			return err
 		}
@@ -186,7 +151,11 @@ func startSender() error {
 			Connection: session,
 		}
 		if sendStream {
-			go streamSendLoop(session)
+			go func() {
+				if err1 := streamSendLoop(session); err1 != nil {
+					log.Printf("error on sending stream data: %v", err1)
+				}
+			}()
 		}
 
 	case "udp":
@@ -292,13 +261,12 @@ func getQLOGTracer(path string) (logging.Tracer, error) {
 	}), nil
 }
 
-func connectQUIC(qlogger logging.Tracer, keyLogger io.Writer) (quic.Connection, *rtc.RTTTracer, error) {
+func connectQUIC(qlogger logging.Tracer, metricsTracer logging.Tracer, keyLogger io.Writer) (quic.Connection, error) {
 	tlsConf := &tls.Config{
 		KeyLogWriter:       keyLogger,
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"rtq"},
 	}
-	metricsTracer := rtc.NewTracer()
 	tracers := []logging.Tracer{metricsTracer}
 	if qlogger != nil {
 		tracers = append(tracers, qlogger)
@@ -312,9 +280,9 @@ func connectQUIC(qlogger logging.Tracer, keyLogger io.Writer) (quic.Connection, 
 	}
 	session, err := quic.DialAddr(sendAddr, tlsConf, quicConf)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return session, metricsTracer, nil
+	return session, nil
 }
 
 func streamSendLoop(session quic.Connection) error {

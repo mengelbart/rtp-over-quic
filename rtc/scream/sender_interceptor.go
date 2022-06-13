@@ -248,8 +248,6 @@ func (s *SenderInterceptor) UnbindLocalStream(info *interceptor.StreamInfo) {
 
 // Close closes the interceptor
 func (s *SenderInterceptor) Close() error {
-	s.log.Info("CLOSE")
-	defer s.log.Info("CLOSE DONE")
 	defer s.wg.Wait()
 	s.m.Lock()
 	defer s.m.Unlock()
@@ -341,7 +339,7 @@ func (s *SenderInterceptor) GetTargetBitrate(ssrc uint32) (int, error) {
 	_, ok := s.rtpStreams[ssrc]
 	s.rtpStreamsMu.Unlock()
 	if !ok {
-		return 0, fmt.Errorf("unknown SSRC, the stream may be unsupported")
+		return 0, fmt.Errorf("unknown SSRC, the stream may be unsupported or not yet registered")
 	}
 
 	s.m.Lock()
