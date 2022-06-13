@@ -6,73 +6,40 @@ import (
 
 	"github.com/lucas-clemente/quic-go"
 	"github.com/mengelbart/rtp-over-quic/transport"
-
-	"github.com/pion/interceptor"
 )
 
-const transportCCURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
-
-type rtcpFeedback struct {
-	buf        []byte
-	attributes interceptor.Attributes
-}
-
-type QUICDgramSender struct {
+type QUICStreamSender struct {
 	baseSender
 
 	conn      quic.Connection
-	transport *transport.Dgram
+	transport *transport.Stream
 }
 
-func NewQUICDgramSender(media MediaSourceFactory, opts ...Option) (*QUICDgramSender, error) {
+func NewQUICStreamSender(media MediaSourceFactory, opts ...Option) (*QUICStreamSender, error) {
 	bs, err := newBaseController(media, opts...)
 	if err != nil {
 		return nil, err
 	}
-	var connection quic.Connection
-	var tracer *RTTTracer
-	if bs.localRFC8888 {
-		tracer = NewTracer()
-		connection, err = connectQUIC(
-			bs.addr,
-			bs.quicCC,
-			tracer,
-			bs.qlogDirName,
-			bs.sslKeyLogFileName,
-		)
-	} else {
-		connection, err = connectQUIC(
-			bs.addr,
-			bs.quicCC,
-			nil,
-			bs.qlogDirName,
-			bs.sslKeyLogFileName,
-		)
-	}
+	connection, err := connectQUIC(
+		bs.addr,
+		bs.quicCC,
+		nil,
+		bs.qlogDirName,
+		bs.sslKeyLogFileName,
+	)
 	if err != nil {
 		return nil, err
 	}
-	s := &QUICDgramSender{
-		conn:       connection,
-		transport:  transport.NewDgramTransportWithConn(connection),
+	s := &QUICStreamSender{
 		baseSender: *bs,
+		conn:       connection,
+		transport:  transport.NewStreamTransportWithConn(connection),
 	}
-
 	s.flow.Bind(s.transport)
-
-	if s.localRFC8888 {
-		s.flow.EnableLocalFeedback(0, tracer, func(f transport.Feedback) {
-			s.rtcpChan <- rtcpFeedback{
-				buf:        f.Buf,
-				attributes: map[interface{}]interface{}{"timestamp": f.Timestamp},
-			}
-		})
-	}
-
 	return s, nil
 }
 
-func (s *QUICDgramSender) Start() error {
+func (s *QUICStreamSender) Start() error {
 	errCh := make(chan error)
 	go func() {
 		if err := s.readRTCPFromNetwork(); err != nil {
@@ -88,7 +55,7 @@ func (s *QUICDgramSender) Start() error {
 	return err
 }
 
-func (s *QUICDgramSender) readRTCPFromNetwork() error {
+func (s *QUICStreamSender) readRTCPFromNetwork() error {
 	buf := make([]byte, 1500)
 	for {
 		n, err := s.transport.Read(buf)
@@ -110,7 +77,7 @@ func (s *QUICDgramSender) readRTCPFromNetwork() error {
 	}
 }
 
-func (s *QUICDgramSender) Close() error {
+func (s *QUICStreamSender) Close() error {
 	if err := s.flow.Close(); err != nil {
 		return err
 	}

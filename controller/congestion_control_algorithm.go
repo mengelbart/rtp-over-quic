@@ -29,3 +29,21 @@ func CongestionControlAlgorithmFromString(a string) CongestionControlAlgorithm {
 		return Reno
 	}
 }
+
+func (a CongestionControlAlgorithm) String() string {
+	switch a {
+	case Reno:
+		return "reno"
+	case Cubic:
+		return "cubic"
+	case BBR:
+		return "bbr"
+	case SCReAM:
+		return "scream"
+	case GCC:
+		return "gcc"
+	default:
+		log.Printf("warning, undefined algorithm: %v", a)
+		return "none"
+	}
+}

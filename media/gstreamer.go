@@ -71,6 +71,11 @@ func (s *GstreamerSource) Play() error {
 	}
 }
 
+func (s *GstreamerSource) Stop() {
+	s.pipeline.Stop()
+	s.pipeline.Destroy()
+}
+
 func (s *GstreamerSource) SetTargetBitrate(bitrate uint) {
 	s.pipeline.SetBitRate(bitrate)
 }

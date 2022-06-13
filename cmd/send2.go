@@ -39,15 +39,6 @@ var sendCmd2 = &cobra.Command{
 }
 
 func startSender2() error {
-	switch sendTransport {
-	case "quic", "quic-dgram":
-		return runDgramSender()
-	case "quic-stream":
-	}
-	return nil
-}
-
-func runDgramSender() error {
 	options := []controller.Option{
 		controller.SetAddr(sendAddr),
 		controller.SetRTPLogFileName(senderRTPDump),
@@ -62,18 +53,64 @@ func runDgramSender() error {
 	if localRFC8888 {
 		options = append(options, controller.EnableLocalRFC8888())
 	}
+	switch sendTransport {
+	case "quic", "quic-dgram":
+		return runDgramSender(options)
+	case "quic-stream":
+	case "udp":
+		return runUDPSender(options)
+	case "tcp":
+		return runTCPSender(options)
+	}
+	return nil
+}
+
+func runDgramSender(options []controller.Option) error {
 	c, err := controller.NewQUICDgramSender(GstreamerSourceFactory(), options...)
 	if err != nil {
 		return err
 	}
 	defer c.Close()
-
 	errCh := make(chan error)
 	go func() {
 		if err := c.Start(); err != nil {
 			errCh <- err
 		}
 	}()
+	return waitUntilSignalOrDone(errCh)
+}
+
+func runUDPSender(options []controller.Option) error {
+	c, err := controller.NewUDPSender(GstreamerSourceFactory(), options...)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	errCh := make(chan error)
+	go func() {
+		if err := c.Start(); err != nil {
+			errCh <- err
+		}
+	}()
+	return waitUntilSignalOrDone(errCh)
+}
+
+func runTCPSender(options []controller.Option) error {
+	c, err := controller.NewTCPSender(GstreamerSourceFactory(), options...)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	errCh := make(chan error)
+	go func() {
+		if err := c.Start(); err != nil {
+			errCh <- err
+		}
+	}()
+	return waitUntilSignalOrDone(errCh)
+}
+
+func waitUntilSignalOrDone(errCh chan error) error {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	select {

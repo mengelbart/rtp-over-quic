@@ -1,6 +1,8 @@
 package transport
 
 import (
+	"context"
+
 	"github.com/lucas-clemente/quic-go"
 )
 
@@ -14,12 +16,12 @@ func NewStreamTransportWithConn(conn quic.Connection) *Stream {
 	}
 }
 
-func (t *Stream) AddFlow(f *Flow) {
-	f.Bind(t)
+func (s *Stream) AddFlow(f *Flow) {
+	f.Bind(s)
 }
 
-func (t *Stream) Write(buf []byte) (int, error) {
-	stream, err := t.conn.OpenUniStream()
+func (s *Stream) Write(buf []byte) (int, error) {
+	stream, err := s.conn.OpenUniStream()
 	if err != nil {
 		return 0, err
 	}
@@ -28,4 +30,12 @@ func (t *Stream) Write(buf []byte) (int, error) {
 		return n, err
 	}
 	return n, stream.Close()
+}
+
+func (s *Stream) Read(buf []byte) (int, error) {
+	stream, err := s.conn.AcceptUniStream(context.Background())
+	if err != nil {
+		return 0, err
+	}
+	return stream.Read(buf)
 }
