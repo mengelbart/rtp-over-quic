@@ -16,7 +16,7 @@ type QUICStreamSender struct {
 }
 
 func NewQUICStreamSender(media MediaSourceFactory, opts ...Option) (*QUICStreamSender, error) {
-	bs, err := newBaseController(media, opts...)
+	bs, err := newBaseSender(media, opts...)
 	if err != nil {
 		return nil, err
 	}

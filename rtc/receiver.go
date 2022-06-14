@@ -13,6 +13,8 @@ import (
 	"github.com/pion/rtcp"
 )
 
+const transportCCURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+
 type RTCPFeedback int
 
 const (
@@ -26,7 +28,6 @@ type Transport interface {
 	SendMessage([]byte, func(error), func(bool)) error
 	ReceiveMessage() ([]byte, error)
 	CloseWithError(int, string) error
-	Metricer
 }
 
 type MediaSink interface {

@@ -25,7 +25,7 @@ type QUICDgramSender struct {
 }
 
 func NewQUICDgramSender(media MediaSourceFactory, opts ...Option) (*QUICDgramSender, error) {
-	bs, err := newBaseController(media, opts...)
+	bs, err := newBaseSender(media, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +84,13 @@ func (s *QUICDgramSender) Start() error {
 			errCh <- err
 		}
 	}()
+	if s.stream {
+		go func() {
+			if err := streamSendLoop(s.conn); err != nil {
+				errCh <- err
+			}
+		}()
+	}
 	err := <-errCh
 	return err
 }
@@ -118,4 +125,20 @@ func (s *QUICDgramSender) Close() error {
 		return err
 	}
 	return s.conn.CloseWithError(0, "bye")
+}
+
+func streamSendLoop(connection quic.Connection) error {
+	log.Println("Open stream")
+	stream, err := connection.OpenUniStream()
+	if err != nil {
+		return err
+	}
+	log.Println("Opened stream")
+	buf := make([]byte, 1200)
+	for {
+		_, err := stream.Write(buf)
+		if err != nil {
+			return err
+		}
+	}
 }

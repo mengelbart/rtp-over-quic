@@ -46,7 +46,7 @@ type baseSender struct {
 	close chan struct{}
 }
 
-func newBaseController(media MediaSourceFactory, opts ...Option) (*baseSender, error) {
+func newBaseSender(media MediaSourceFactory, opts ...Option) (*baseSender, error) {
 	c := &baseSender{
 		addr:              ":4242",
 		quicCC:            0,

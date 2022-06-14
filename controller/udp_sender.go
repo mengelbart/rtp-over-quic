@@ -15,7 +15,7 @@ type UDPSender struct {
 }
 
 func NewUDPSender(media MediaSourceFactory, opts ...Option) (*UDPSender, error) {
-	bs, err := newBaseController(media, opts...)
+	bs, err := newBaseSender(media, opts...)
 	if err != nil {
 		return nil, err
 	}

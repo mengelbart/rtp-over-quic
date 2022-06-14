@@ -47,6 +47,7 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, opts ...Con
 }
 
 func (s *GstreamerSource) Play() error {
+	go gstsrc.StartMainLoop()
 	go s.pipeline.Start()
 
 	buf := make([]byte, 2<<16)

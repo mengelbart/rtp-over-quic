@@ -8,103 +8,30 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"runtime"
-	"runtime/pprof"
+	"strings"
 	"syscall"
 
+	"github.com/lucas-clemente/quic-go/logging"
+	"github.com/lucas-clemente/quic-go/qlog"
 	gstsink "github.com/mengelbart/gst-go/gstreamer-sink"
 	"github.com/mengelbart/rtp-over-quic/rtc"
 	"github.com/spf13/cobra"
 )
 
 var (
-	receiveTransport string
-	receiveAddr      string
-	receiverRTPDump  string
-	receiverRTCPDump string
-	receiverCodec    string
-	receiverQLOGDir  string
-	sink             string
-	rtcpFeedback     string
-
-	receiverCPUProfile       string
-	receiverGoroutineProfile string
-	receiverHeapProfile      string
-	receiverAllocsProfile    string
-	receiverBlockProfile     string
-	receiverMutexProfile     string
+	sink         string
+	rtcpFeedback string
 )
 
 func init() {
 	go gstsink.StartMainLoop()
-
 	rootCmd.AddCommand(receiveCmd)
-
-	receiveCmd.Flags().StringVar(&receiveTransport, "transport", "quic", "Transport protocol to use")
-	receiveCmd.Flags().StringVarP(&receiveAddr, "addr", "a", ":4242", "QUIC server address")
-	receiveCmd.Flags().StringVarP(&receiverCodec, "codec", "c", "h264", "Media codec")
 	receiveCmd.Flags().StringVar(&sink, "sink", "autovideosink", "Media sink")
-	receiveCmd.Flags().StringVar(&receiverRTPDump, "rtp-dump", "", "RTP dump file")
-	receiveCmd.Flags().StringVar(&receiverRTCPDump, "rtcp-dump", "", "RTCP dump file")
-	receiveCmd.Flags().StringVar(&receiverQLOGDir, "qlog", "", "QLOG directory. No logs if empty. Use 'sdtout' for Stdout or '<directory>' for a QLOG file named '<directory>/<connection-id>.qlog'")
-	receiveCmd.Flags().StringVar(&rtcpFeedback, "rtcp-feedback", "none", "RTCP Congestion Control Feedback to send ('none', 'rfc8888', 'rfc8888-pion', 'twcc')")
-
-	receiveCmd.Flags().StringVar(&receiverCPUProfile, "pprof-cpu", "", "Create pprof CPU profile with given filename")
-	receiveCmd.Flags().StringVar(&receiverGoroutineProfile, "pprof-goroutine", "", "Create pprof 'goroutine' profile with given filename")
-	receiveCmd.Flags().StringVar(&receiverHeapProfile, "pprof-heap", "", "Create pprof 'heap' profile with given filename")
-	receiveCmd.Flags().StringVar(&receiverAllocsProfile, "pprof-allocs", "", "Create pprof 'allocs' profile with given filename")
-	receiveCmd.Flags().StringVar(&receiverBlockProfile, "pprof-block", "", "Create pprof 'block' profile with given filename")
-	receiveCmd.Flags().StringVar(&receiverMutexProfile, "pprof-mutex", "", "Create pprof 'mutex' profile with given filename")
 }
 
 var receiveCmd = &cobra.Command{
 	Use: "receive",
 	Run: func(_ *cobra.Command, _ []string) {
-		if receiverCPUProfile != "" {
-			f, err := os.Create(receiverCPUProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			pprof.StartCPUProfile(f)
-			defer pprof.StopCPUProfile()
-		}
-		if receiverGoroutineProfile != "" {
-			f, err := os.Create(receiverGoroutineProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer pprof.Lookup("goroutine").WriteTo(f, 0)
-		}
-		if receiverHeapProfile != "" {
-			f, err := os.Create(receiverHeapProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer pprof.Lookup("heap").WriteTo(f, 0)
-		}
-		if receiverAllocsProfile != "" {
-			f, err := os.Create(receiverAllocsProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer pprof.Lookup("allocs").WriteTo(f, 0)
-		}
-		if receiverBlockProfile != "" {
-			runtime.SetBlockProfileRate(1)
-			f, err := os.Create(receiverBlockProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer pprof.Lookup("block").WriteTo(f, 0)
-		}
-		if receiverMutexProfile != "" {
-			runtime.SetMutexProfileFraction(1)
-			f, err := os.Create(receiverMutexProfile)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer pprof.Lookup("mutex").WriteTo(f, 0)
-		}
 		if err := startReceiver(); err != nil {
 			log.Fatal(err)
 		}
@@ -112,13 +39,13 @@ var receiveCmd = &cobra.Command{
 }
 
 func startReceiver() error {
-	rtpDumpFile, err := getLogFile(receiverRTPDump)
+	rtpDumpFile, err := getLogFile(rtpDumpFile)
 	if err != nil {
 		return err
 	}
 	defer rtpDumpFile.Close()
 
-	rtcpDumpfile, err := getLogFile(receiverRTCPDump)
+	rtcpDumpfile, err := getLogFile(rtcpDumpFile)
 	if err != nil {
 		return err
 	}
@@ -134,7 +61,7 @@ func startReceiver() error {
 	if err != nil {
 		return err
 	}
-	tracer, err := getQLOGTracer(receiverQLOGDir)
+	tracer, err := getQLOGTracer(qlogDir)
 	if err != nil {
 		return err
 	}
@@ -142,17 +69,17 @@ func startReceiver() error {
 	var mediaSink rtc.MediaSinkFactory = func() (rtc.MediaSink, error) {
 		return nopCloser{io.Discard}, nil
 	}
-	if receiverCodec != "syncodec" {
-		mediaSink = gstSinkFactory(receiverCodec, sink)
+	if codec != "syncodec" {
+		mediaSink = gstSinkFactory(codec, sink)
 	}
 
 	errCh := make(chan error)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	switch receiveTransport {
+	switch transport {
 	case "quic":
-		server, err := rtc.NewServer(receiverFactory, receiveAddr, mediaSink, tracer)
+		server, err := rtc.NewServer(receiverFactory, addr, mediaSink, tracer)
 		if err != nil {
 			return err
 		}
@@ -163,7 +90,7 @@ func startReceiver() error {
 		}()
 
 	case "udp":
-		server, err := rtc.NewUDPServer(receiverFactory, receiveAddr, mediaSink)
+		server, err := rtc.NewUDPServer(receiverFactory, addr, mediaSink)
 		if err != nil {
 			return err
 		}
@@ -175,7 +102,7 @@ func startReceiver() error {
 		}()
 
 	case "tcp":
-		server, err := rtc.NewTCPServer(receiverFactory, receiveAddr, mediaSink)
+		server, err := rtc.NewTCPServer(receiverFactory, addr, mediaSink)
 		if err != nil {
 			return err
 		}
@@ -186,7 +113,7 @@ func startReceiver() error {
 			errCh <- server.Listen(ctx)
 		}()
 	default:
-		return fmt.Errorf("unknown transport protocol: %v", receiveTransport)
+		return fmt.Errorf("unknown transport protocol: %v", transport)
 	}
 
 	sigs := make(chan os.Signal, 1)
@@ -278,4 +205,35 @@ func getLogFile(file string) (io.WriteCloser, error) {
 		f:   fd,
 		buf: bufwriter,
 	}, nil
+}
+
+func getQLOGTracer(path string) (logging.Tracer, error) {
+	if len(path) == 0 {
+		return nil, nil
+	}
+	if path == "stdout" {
+		return qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
+			return nopCloser{os.Stdout}
+		}), nil
+	}
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err = os.MkdirAll(path, 0o666); err != nil {
+				return nil, fmt.Errorf("failed to create qlog dir %s: %v", path, err)
+			}
+		} else {
+			return nil, err
+		}
+	}
+	return qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
+		file := fmt.Sprintf("%s/%x_%v.qlog", strings.TrimRight(path, "/"), connectionID, p)
+		w, err := os.Create(file)
+		if err != nil {
+			log.Printf("failed to create qlog file %s: %v", path, err)
+			return nil
+		}
+		log.Printf("created qlog file: %s\n", path)
+		return w
+	}), nil
 }

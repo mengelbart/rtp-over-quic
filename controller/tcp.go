@@ -25,5 +25,28 @@ func connectTCP(addr string, cc CongestionControlAlgorithm) (*net.TCPConn, error
 	if err != nil {
 		return nil, err
 	}
+	// TODO: Use something like this for tcp cwnd logging:
+	//go func() {
+	//	t := time.NewTicker(200 * time.Millisecond)
+	//	for range t.C {
+	//		conn, ok := conn.(interface {
+	//			SyscallConn() (syscall.RawConn, error)
+	//		})
+	//		if !ok {
+	//			panic(errors.New("doesn't have a SyscallConn"))
+	//		}
+	//		rawConn, err := conn.SyscallConn()
+	//		if err != nil {
+	//			panic(fmt.Errorf("couldn't get syscall.RawConn: %w", err))
+	//		}
+	//		rawConn.Control(func(fd uintptr) {
+	//			info, serr := unix.GetsockoptTCPInfo(int(fd), unix.SOL_TCP, unix.TCP_INFO)
+	//			if serr != nil {
+	//				panic(serr)
+	//			}
+	//			fmt.Printf("%v\n", info.Snd_cwnd)
+	//		})
+	//	}
+	//}()
 	return conn.(*net.TCPConn), nil
 }

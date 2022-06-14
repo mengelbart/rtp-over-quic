@@ -111,10 +111,6 @@ func (t *udpTransport) CloseWithError(code int, msg string) error {
 	return nil
 }
 
-func (t *udpTransport) Metrics() RTTStats {
-	panic(fmt.Errorf("UDP does not provide metrics"))
-}
-
 func SetReceiveBuffer(c net.PacketConn) error {
 	conn, ok := c.(interface{ SetReadBuffer(int) error })
 	if !ok {

@@ -57,7 +57,6 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 		go s.receiveStreamLoop(ctx, session)
 
 		receiver, err := s.makeReceiver(&QUICTransport{
-			RTTTracer:  nil,
 			Connection: session,
 		}, s.sinkFactory)
 		if err != nil {
@@ -76,7 +75,6 @@ func (s *Server) Listen(ctx context.Context) (err error) {
 }
 
 type QUICTransport struct {
-	*RTTTracer
 	quic.Connection
 }
 

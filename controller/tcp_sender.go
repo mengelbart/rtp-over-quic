@@ -15,7 +15,7 @@ type TCPSender struct {
 }
 
 func NewTCPSender(media MediaSourceFactory, opts ...Option) (*TCPSender, error) {
-	bs, err := newBaseController(media, opts...)
+	bs, err := newBaseSender(media, opts...)
 	if err != nil {
 		return nil, err
 	}

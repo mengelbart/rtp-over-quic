@@ -88,7 +88,3 @@ func (t *tcpTransport) SendMessage(msg []byte, _ func(error), _ func(bool)) erro
 func (t *tcpTransport) CloseWithError(_ int, _ string) error {
 	return t.conn.Close()
 }
-
-func (t *tcpTransport) Metrics() RTTStats {
-	panic(fmt.Errorf("UDP does not provide metrics"))
-}
