@@ -9,29 +9,25 @@ import (
 )
 
 type GstreamerSource struct {
-	codec         string
-	src           string
-	ssrc          uint
-	targetBitrate uint
-	pipeline      *gstsrc.Pipeline
-	rtpWriter     interceptor.RTPWriter
+	Config
+	src       string
+	pipeline  *gstsrc.Pipeline
+	rtpWriter interceptor.RTPWriter
 }
 
-type GstreamerSourceOption func(*GstreamerSource) error
-
-func NewGstreamerSource(rtpWriter interceptor.RTPWriter, opts ...GstreamerSourceOption) (*GstreamerSource, error) {
-	s := &GstreamerSource{
-		codec:         "h264",
-		src:           "videotestsrc",
-		ssrc:          0,
-		targetBitrate: 100_000,
-		rtpWriter:     rtpWriter,
+func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, opts ...ConfigOption) (*GstreamerSource, error) {
+	if len(src) == 0 {
+		return nil, fmt.Errorf("invalid source string: %v, use 'videotestsrc' or a valid filename instead", src)
 	}
 
-	for _, opt := range opts {
-		if err := opt(s); err != nil {
-			return nil, err
-		}
+	c, err := newConfig(opts...)
+	if err != nil {
+		return nil, err
+	}
+	s := &GstreamerSource{
+		Config:    *c,
+		src:       src,
+		rtpWriter: rtpWriter,
 	}
 
 	var srcString string
@@ -45,7 +41,7 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, opts ...GstreamerSource
 		return nil, err
 	}
 	s.pipeline = p
-	s.pipeline.SetSSRC(s.ssrc)
+	s.pipeline.SetSSRC(uint(s.ssrc))
 	s.pipeline.SetBitRate(s.targetBitrate)
 	return s, nil
 }
@@ -78,32 +74,4 @@ func (s *GstreamerSource) Stop() {
 
 func (s *GstreamerSource) SetTargetBitrate(bitrate uint) {
 	s.pipeline.SetBitRate(bitrate)
-}
-
-func GstreamerSourceCodec(c string) GstreamerSourceOption {
-	return func(gs *GstreamerSource) error {
-		gs.codec = c
-		return nil
-	}
-}
-
-func GstreamerSourceString(s string) GstreamerSourceOption {
-	return func(gs *GstreamerSource) error {
-		gs.src = s
-		return nil
-	}
-}
-
-func GstreamerSourceSSRC(ssrc uint) GstreamerSourceOption {
-	return func(gs *GstreamerSource) error {
-		gs.ssrc = ssrc
-		return nil
-	}
-}
-
-func GstreamerSourceInitialTargetBitrate(r uint) GstreamerSourceOption {
-	return func(gs *GstreamerSource) error {
-		gs.targetBitrate = r
-		return nil
-	}
 }

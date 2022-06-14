@@ -39,12 +39,22 @@ var sendCmd2 = &cobra.Command{
 }
 
 func startSender2() error {
+	mediaOptions := []media.ConfigOption{
+		media.Codec(senderCodec),
+	}
+	mediaFactory := GstreamerSourceFactory(source, mediaOptions...)
+	if source == "syncodec" {
+		mediaFactory = SyncodecSourceFactory(mediaOptions...)
+	}
 	options := []controller.Option{
 		controller.SetAddr(sendAddr),
 		controller.SetRTPLogFileName(senderRTPDump),
 		controller.SetRTCPLogFileName(senderRTCPDump),
 		controller.SetCCLogFileName(ccDump),
 		controller.SetQLOGDirName(senderQLOGDir),
+		controller.SetSSLKeyLogFileName(keyLogFile),
+		controller.SetQUICCongestionControlAlgorithm(controller.CongestionControlAlgorithmFromString(quicCC)),
+		controller.SetTCPCongestionControlAlgorithm(controller.CongestionControlAlgorithmFromString(tcpCongAlg)),
 		controller.SetRTPCongestionControlAlgorithm(controller.CongestionControlAlgorithmFromString(rtpCC)),
 	}
 	if sendStream {
@@ -55,18 +65,18 @@ func startSender2() error {
 	}
 	switch sendTransport {
 	case "quic", "quic-dgram":
-		return runDgramSender(options)
+		return runDgramSender(options, mediaFactory)
 	case "quic-stream":
 	case "udp":
-		return runUDPSender(options)
+		return runUDPSender(options, mediaFactory)
 	case "tcp":
-		return runTCPSender(options)
+		return runTCPSender(options, mediaFactory)
 	}
 	return nil
 }
 
-func runDgramSender(options []controller.Option) error {
-	c, err := controller.NewQUICDgramSender(GstreamerSourceFactory(), options...)
+func runDgramSender(options []controller.Option, mf controller.MediaSourceFactory) error {
+	c, err := controller.NewQUICDgramSender(mf, options...)
 	if err != nil {
 		return err
 	}
@@ -80,8 +90,8 @@ func runDgramSender(options []controller.Option) error {
 	return waitUntilSignalOrDone(errCh)
 }
 
-func runUDPSender(options []controller.Option) error {
-	c, err := controller.NewUDPSender(GstreamerSourceFactory(), options...)
+func runUDPSender(options []controller.Option, mf controller.MediaSourceFactory) error {
+	c, err := controller.NewUDPSender(mf, options...)
 	if err != nil {
 		return err
 	}
@@ -95,8 +105,8 @@ func runUDPSender(options []controller.Option) error {
 	return waitUntilSignalOrDone(errCh)
 }
 
-func runTCPSender(options []controller.Option) error {
-	c, err := controller.NewTCPSender(GstreamerSourceFactory(), options...)
+func runTCPSender(options []controller.Option, mf controller.MediaSourceFactory) error {
+	c, err := controller.NewTCPSender(mf, options...)
 	if err != nil {
 		return err
 	}
@@ -127,9 +137,15 @@ func (f mediaSourceFactoryFunc) Create(w interceptor.RTPWriter) (controller.Medi
 	return f(w)
 }
 
-func GstreamerSourceFactory() controller.MediaSourceFactory {
+func GstreamerSourceFactory(src string, opts ...media.ConfigOption) controller.MediaSourceFactory {
 	return mediaSourceFactoryFunc(func(w interceptor.RTPWriter) (controller.MediaSource, error) {
-		return media.NewGstreamerSource(w)
+		return media.NewGstreamerSource(w, src, opts...)
+	})
+}
+
+func SyncodecSourceFactory(opts ...media.ConfigOption) controller.MediaSourceFactory {
+	return mediaSourceFactoryFunc(func(w interceptor.RTPWriter) (controller.MediaSource, error) {
+		return media.NewSyncodecSource(w, opts...)
 	})
 }
 
