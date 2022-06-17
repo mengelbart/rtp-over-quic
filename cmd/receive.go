@@ -89,13 +89,12 @@ func startReceiver() error {
 		controller.SetQLOGDirName[controller.BaseServer](qlogDir),
 		controller.SetSSLKeyLogFileName[controller.BaseServer](keyLogFile),
 	}
-	if getRTCP(rtcpFeedback) == RTCP_RFC8888 {
+	switch getRTCP(rtcpFeedback) {
+	case RTCP_RFC8888:
 		options = append(options, controller.EnableRFC8888())
-	}
-	if getRTCP(rtcpFeedback) == RTCP_RFC8888_PION {
+	case RTCP_RFC8888_PION:
 		options = append(options, controller.EnableRFC8888Pion())
-	}
-	if getRTCP(rtcpFeedback) == RTCP_TWCC {
+	case RTCP_TWCC:
 		options = append(options, controller.EnableTWCC())
 	}
 
@@ -125,8 +124,10 @@ func startReceiver() error {
 func getServer(transport string, mf controller.MediaSinkFactory, options ...controller.Option[controller.BaseServer]) (Starter, error) {
 	switch transport {
 	case "quic", "quic-dgram":
-		return controller.NewQUICServer(mf, options...)
+		return controller.NewQUICServer(mf, false, options...)
 	case "quic-stream":
+		options = append(options, controller.MTU[controller.BaseServer](65_000))
+		return controller.NewQUICServer(mf, true, options...)
 	case "udp":
 		return controller.NewUDPServer(mf, options...)
 	case "tcp":

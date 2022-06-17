@@ -3,6 +3,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 )
+
+var errInvalidTransport = errors.New("transport does not implement ack/loss callback")
 
 // TODO: Implement flow without using flow id
 type flow struct {
@@ -44,16 +47,24 @@ func newFlowWithID(id uint64) *flow {
 
 func (f *flow) write(payload []byte) (int, error) {
 	if f.useID {
-		buf := make([]byte, len(f.varIntID)+len(payload))
-		copy(buf, f.varIntID)
-		copy(buf[len(f.varIntID):], payload)
-		return f.transport.Write(buf)
+		payload = append(f.varIntID, payload...)
 	}
 	return f.transport.Write(payload)
 }
 
 func (f *flow) writeWithCallBack(payload []byte, callback func(bool)) (int, error) {
-	return f.transport.(*Dgram).WriteWithAckLossCallback(payload, callback)
+	if f.useID {
+		payload = append(f.varIntID, payload...)
+	}
+
+	switch t := f.transport.(type) {
+	case *Dgram:
+		return t.WriteWithAckLossCallback(payload, callback)
+	case *Stream:
+		return t.WriteWithAckLossCallback(payload, callback)
+	default:
+		return 0, errInvalidTransport
+	}
 }
 
 type RTCPFlow struct {

@@ -15,7 +15,7 @@ func newConfig(opts ...ConfigOption) (*Config, error) {
 	c := &Config{
 		targetBitrate: 100_000,
 		ssrc:          0,
-		mtu:           1500,
+		mtu:           1200,
 		payloadType:   96,
 		clockRate:     90000,
 		codec:         "h264",

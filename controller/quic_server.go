@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"strconv"
 	"sync"
@@ -16,15 +17,17 @@ import (
 
 type QUICServer struct {
 	BaseServer
+	isStreamServer bool
 }
 
-func NewQUICServer(mediaFactory MediaSinkFactory, opts ...Option[BaseServer]) (*QUICServer, error) {
+func NewQUICServer(mediaFactory MediaSinkFactory, isStreamServer bool, opts ...Option[BaseServer]) (*QUICServer, error) {
 	bs, err := newBaseServer(mediaFactory, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return &QUICServer{
-		BaseServer: *bs,
+		BaseServer:     *bs,
+		isStreamServer: isStreamServer,
 	}, nil
 }
 
@@ -68,8 +71,14 @@ func (s *QUICServer) handle(ctx context.Context, conn quic.Connection) error {
 			log.Printf("failed to close interceptor: %v", err1)
 		}
 	}()
-	dgram := transport.NewDgramTransportWithConn(conn)
-	receiver := newReceiver(demultiplexerFunc(func(pkt []byte) (uint64, []byte, error) {
+	var t io.ReadWriter
+	if s.isStreamServer {
+		t = transport.NewStreamTransportWithConn(conn)
+	}
+	if !s.isStreamServer {
+		t = transport.NewDgramTransportWithConn(conn)
+	}
+	receiver := newReceiver(s.mtu, demultiplexerFunc(func(pkt []byte) (uint64, []byte, error) {
 		id, err1 := quicvarint.Read(bytes.NewReader(pkt))
 		if err1 != nil {
 			return 0, pkt, fmt.Errorf("failed to read flow ID: %w", err1)
@@ -81,9 +90,9 @@ func (s *QUICServer) handle(ctx context.Context, conn quic.Connection) error {
 	if err != nil {
 		return err
 	}
-	receiver.addIncomingFlow(0, i, sink, dgram)
+	receiver.addIncomingFlow(0, i, sink, t)
 	rtcpFlow := transport.NewRTCPFlowWithID(0)
-	rtcpFlow.Bind(dgram)
+	rtcpFlow.Bind(t)
 	i.BindRTCPWriter(rtcpFlow)
 
 	wg, ctx := errgroup.WithContext(ctx)

@@ -3,6 +3,7 @@ package media
 import (
 	"fmt"
 	"io"
+	"log"
 	"sync"
 
 	gstsink "github.com/mengelbart/gst-go/gstreamer-sink"
@@ -45,20 +46,21 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, opts ...Con
 	} else {
 		srcString = "videotestsrc ! clocksync "
 	}
-	p, err := gstsrc.NewPipeline(s.codec, srcString)
+	p, err := gstsrc.NewPipeline(s.codec, srcString, gstsrc.MTU(c.mtu))
 	if err != nil {
 		return nil, err
 	}
 	s.pipeline = p
 	s.pipeline.SetSSRC(uint(s.ssrc))
 	s.pipeline.SetBitRate(s.targetBitrate)
+	log.Printf("src pipeline: %v", s.pipeline.String())
 	return s, nil
 }
 
 func (s *GstreamerSource) Play() error {
 	go s.pipeline.Start()
 
-	buf := make([]byte, 1500)
+	buf := make([]byte, s.mtu)
 	for {
 		n, err := s.pipeline.Read(buf)
 		if err != nil {
@@ -111,6 +113,7 @@ func NewGstreamerSink(dst string, opts ...ConfigOption) (*GstreamerSink, error) 
 		return nil, err
 	}
 	s.pipeline = p
+	log.Printf("sink pipeline: %v", s.pipeline.String())
 	return s, nil
 }
 

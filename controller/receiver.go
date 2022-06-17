@@ -26,6 +26,8 @@ func (f demultiplexerFunc) getFlow(pkt []byte) (uint64, []byte, error) {
 }
 
 type receiver struct {
+	mtu uint
+
 	// implementation
 	demultiplexer
 	lock          sync.Mutex
@@ -36,8 +38,9 @@ type receiver struct {
 	transport io.ReadWriter
 }
 
-func newReceiver(d demultiplexer) *receiver {
+func newReceiver(mtu uint, d demultiplexer) *receiver {
 	return &receiver{
+		mtu:           mtu,
 		demultiplexer: d,
 		lock:          sync.Mutex{},
 		mediaSinks:    map[uint64]MediaSink{},
@@ -82,7 +85,7 @@ func (r *receiver) addIncomingFlow(id uint64, i interceptor.Interceptor, sink Me
 }
 
 func (r *receiver) receive() error {
-	buf := make([]byte, 1500)
+	buf := make([]byte, r.mtu)
 
 	for {
 		n, err := r.transport.Read(buf)

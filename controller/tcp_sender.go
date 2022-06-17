@@ -51,7 +51,7 @@ func (s *TCPSender) Start(ctx context.Context) error {
 }
 
 func (s *TCPSender) readRTCPFromNetwork(transport io.Reader) error {
-	buf := make([]byte, 1500)
+	buf := make([]byte, s.mtu)
 	for {
 		n, err := transport.Read(buf)
 		if err != nil {

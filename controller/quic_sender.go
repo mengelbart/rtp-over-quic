@@ -5,7 +5,6 @@ import (
 	"context"
 	"io"
 	"log"
-	"net"
 
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/quicvarint"
@@ -22,21 +21,23 @@ type rtcpFeedback struct {
 	attributes interceptor.Attributes
 }
 
-type QUICDgramSender struct {
+type QUICSender struct {
 	BaseSender
+	isStreamSender bool
 }
 
-func NewQUICDgramSender(media MediaSourceFactory, opts ...Option[BaseSender]) (*QUICDgramSender, error) {
+func NewQUICSender(media MediaSourceFactory, isStreamSender bool, opts ...Option[BaseSender]) (*QUICSender, error) {
 	bs, err := newBaseSender(media, append(opts, EnableFlowID(0))...)
 	if err != nil {
 		return nil, err
 	}
-	return &QUICDgramSender{
-		BaseSender: *bs,
+	return &QUICSender{
+		BaseSender:     *bs,
+		isStreamSender: isStreamSender,
 	}, nil
 }
 
-func (s *QUICDgramSender) Start(ctx context.Context) error {
+func (s *QUICSender) Start(ctx context.Context) error {
 	var connection quic.Connection
 	var tracer *RTTTracer
 	var err error
@@ -63,7 +64,14 @@ func (s *QUICDgramSender) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	t := transport.NewDgramTransportWithConn(connection)
+	var t io.ReadWriter
+
+	if s.isStreamSender {
+		t = transport.NewStreamTransportWithConn(connection)
+	}
+	if !s.isStreamSender {
+		t = transport.NewDgramTransportWithConn(connection)
+	}
 	s.flow.Bind(t)
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -100,18 +108,15 @@ func (s *QUICDgramSender) Start(ctx context.Context) error {
 	return g.Wait()
 }
 
-func (s *QUICDgramSender) readRTCPFromNetwork(transport io.Reader) error {
-	buf := make([]byte, 1500)
+func (s *QUICSender) readRTCPFromNetwork(transport io.Reader) error {
+	buf := make([]byte, s.mtu)
 	for {
 		n, err := transport.Read(buf)
 		if err != nil {
-			if e, ok := err.(net.Error); ok && !e.Temporary() {
-				return err
-			}
 			if e, ok := err.(*quic.ApplicationError); ok && e.ErrorCode == 0 {
 				return nil
 			}
-			log.Printf("failed to read from transport: %v", err)
+			return err
 		}
 		// TODO: If multiple RTCP flows are required, demultiplex on id here
 		id, err := quicvarint.Read(bytes.NewReader(buf[:n]))

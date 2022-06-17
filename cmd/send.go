@@ -45,6 +45,9 @@ func startSender() error {
 	mediaOptions := []media.ConfigOption{
 		media.Codec(codec),
 	}
+	if transport == "quic-stream" {
+		mediaOptions = append(mediaOptions, media.MTU(65_000))
+	}
 	mediaFactory := GstreamerSourceFactory(source, mediaOptions...)
 	if source == "syncodec" {
 		mediaFactory = SyncodecSourceFactory(mediaOptions...)
@@ -97,8 +100,10 @@ type Starter interface {
 func getSender(transport string, mf controller.MediaSourceFactory, options ...controller.Option[controller.BaseSender]) (Starter, error) {
 	switch transport {
 	case "quic", "quic-dgram":
-		return controller.NewQUICDgramSender(mf, options...)
+		return controller.NewQUICSender(mf, false, options...)
 	case "quic-stream":
+		options = append(options, controller.MTU[controller.BaseSender](65_000))
+		return controller.NewQUICSender(mf, true, options...)
 	case "udp":
 		return controller.NewUDPSender(mf, options...)
 	case "tcp":

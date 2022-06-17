@@ -20,6 +20,10 @@ func (t *Dgram) Write(buf []byte) (int, error) {
 	return len(buf), t.conn.SendMessage(buf, nil, nil)
 }
 
+func (t *Dgram) WriteWithAckLossCallback(buf []byte, cb func(bool)) (int, error) {
+	return len(buf), t.conn.SendMessage(buf, nil, cb)
+}
+
 func (t *Dgram) Read(buf []byte) (int, error) {
 	msg, err := t.conn.ReceiveMessage()
 	if err != nil {
@@ -33,10 +37,6 @@ func (t *Dgram) Read(buf []byte) (int, error) {
 		return 0, fmt.Errorf("copied less bytes than received: copied %v, but received %v", n, len(msg))
 	}
 	return n, nil
-}
-
-func (t *Dgram) WriteWithAckLossCallback(buf []byte, cb func(bool)) (int, error) {
-	return len(buf), t.conn.SendMessage(buf, nil, cb)
 }
 
 func (t *Dgram) AddFlow(f *RTPFlow) {

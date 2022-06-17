@@ -18,6 +18,7 @@ func newBaseServer(mediaFactory MediaSinkFactory, opts ...Option[BaseServer]) (*
 	c := &BaseServer{
 		commonBaseConfig: commonBaseConfig{
 			addr:              ":4242",
+			mtu:               1500,
 			quicCC:            Reno,
 			qlogDirName:       "",
 			sslKeyLogFileName: "",

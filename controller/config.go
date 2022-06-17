@@ -12,6 +12,8 @@ var errInvalidOption = errors.New("invalid option type")
 type commonBaseConfig struct {
 	addr string
 
+	mtu uint
+
 	quicCC            CongestionControlAlgorithm
 	qlogDirName       string
 	sslKeyLogFileName string
@@ -60,6 +62,20 @@ type Option[T BaseSender | BaseServer] func(*T) error
 //
 // If this constrained will be removed at some point, we can clean this up
 // again.
+
+func MTU[T BaseSender | BaseServer](mtu uint) Option[T] {
+	return func(s *T) error {
+		switch x := any(s).(type) {
+		case *BaseSender:
+			x.mtu = mtu
+		case *BaseServer:
+			x.mtu = mtu
+		default:
+			return errInvalidOption
+		}
+		return nil
+	}
+}
 
 func EnableFlowID[T BaseSender](id uint64) Option[T] {
 	return func(s *T) error {

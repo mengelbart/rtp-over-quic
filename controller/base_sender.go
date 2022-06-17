@@ -40,6 +40,7 @@ func newBaseSender(media MediaSourceFactory, opts ...Option[BaseSender]) (*BaseS
 	c := &BaseSender{
 		commonBaseConfig: commonBaseConfig{
 			addr:              ":4242",
+			mtu:               1500,
 			quicCC:            Reno,
 			qlogDirName:       "",
 			sslKeyLogFileName: "",

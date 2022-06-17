@@ -37,10 +37,12 @@ func listenQUIC(
 		return nil, err
 	}
 	quicConf := &quic.Config{
-		EnableDatagrams:      true,
-		HandshakeIdleTimeout: 15 * time.Second,
-		Tracer:               qlogWriter,
-		DisableCC:            cc != Reno,
+		EnableDatagrams:       true,
+		HandshakeIdleTimeout:  15 * time.Second,
+		Tracer:                qlogWriter,
+		DisableCC:             cc != Reno,
+		MaxIncomingStreams:    1 << 60,
+		MaxIncomingUniStreams: 1 << 60,
 	}
 	tlsConf := generateTLSConfig(keyLogger)
 	return quic.ListenAddr(addr, tlsConf, quicConf)
@@ -73,10 +75,12 @@ func connectQUIC(
 	}
 	tracer := logging.NewMultiplexedTracer(tracers...)
 	quicConf := &quic.Config{
-		EnableDatagrams:      true,
-		HandshakeIdleTimeout: 15 * time.Second,
-		Tracer:               tracer,
-		DisableCC:            cc != Reno,
+		EnableDatagrams:       true,
+		HandshakeIdleTimeout:  15 * time.Second,
+		Tracer:                tracer,
+		DisableCC:             cc != Reno,
+		MaxIncomingStreams:    1 << 60,
+		MaxIncomingUniStreams: 1 << 60,
 	}
 	session, err := quic.DialAddrContext(ctx, addr, tlsConf, quicConf)
 	if err != nil {

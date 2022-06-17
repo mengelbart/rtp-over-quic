@@ -74,7 +74,7 @@ func (s *TCPServer) handle(ctx context.Context, conn *net.TCPConn) error {
 		}
 	}()
 	tcp := transport.NewTCPTransportWithConn(conn)
-	receiver := newReceiver(demultiplexerFunc(func(pkt []byte) (uint64, []byte, error) {
+	receiver := newReceiver(s.mtu, demultiplexerFunc(func(pkt []byte) (uint64, []byte, error) {
 		return 0, pkt, nil
 	}))
 	sink, err := s.mediaFactory.Create()

@@ -51,7 +51,7 @@ func (s *UDPServer) Start(ctx context.Context) error {
 
 	var wg sync.WaitGroup
 
-	buf := make([]byte, 1500)
+	buf := make([]byte, s.mtu)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -143,7 +143,7 @@ func (s *UDPServer) route() {
 				dataCh:      make(chan []byte, 1024),
 				readTimeout: 0,
 			}
-			receiver := newReceiver(demultiplexerFunc(func(pkt []byte) (uint64, []byte, error) {
+			receiver := newReceiver(s.mtu, demultiplexerFunc(func(pkt []byte) (uint64, []byte, error) {
 				return 0, pkt, nil
 			}))
 			receiver.addIncomingFlow(0, i, sink, client)
