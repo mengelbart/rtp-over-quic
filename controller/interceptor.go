@@ -4,7 +4,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/mengelbart/rtp-over-quic/rtc/scream"
+	"github.com/mengelbart/rtp-over-quic/scream"
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/cc"
 	"github.com/pion/interceptor/pkg/gcc"

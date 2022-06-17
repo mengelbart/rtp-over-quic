@@ -1,62 +1,75 @@
 package controller
 
 import (
+	"context"
+	"errors"
+	"io"
 	"log"
 	"net"
 
 	"github.com/mengelbart/rtp-over-quic/transport"
+	"golang.org/x/sync/errgroup"
 )
 
 type UDPSender struct {
-	baseSender
-
-	connection *net.UDPConn
-	transport  *transport.UDP
+	BaseSender
 }
 
-func NewUDPSender(media MediaSourceFactory, opts ...Option) (*UDPSender, error) {
+func NewUDPSender(media MediaSourceFactory, opts ...Option[BaseSender]) (*UDPSender, error) {
 	bs, err := newBaseSender(media, opts...)
 	if err != nil {
 		return nil, err
 	}
-	connection, err := connectUDP(bs.addr)
+	return &UDPSender{BaseSender: *bs}, nil
+}
+
+func (s *UDPSender) Start(ctx context.Context) error {
+	connection, err := connectUDP(s.addr)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	s := &UDPSender{
-		connection: connection,
-		transport:  transport.NewUDPTransportWithConn(connection),
-		baseSender: *bs,
-	}
+	t := transport.NewUDPTransportWithConn(connection)
+	s.flow.Bind(t)
 
-	s.flow.Bind(s.transport)
+	wg, ctx := errgroup.WithContext(ctx)
 
-	return s, nil
-}
+	wg.Go(func() error {
+		return s.readRTCPFromNetwork(t)
+	})
 
-func (s *UDPSender) Start() error {
-	go func() {
-		if err := s.readRTCPFromNetwork(); err != nil {
-			log.Printf("failed to read from network: %v", err)
+	wg.Go(func() error {
+		return s.BaseSender.Start(ctx)
+	})
+
+	wg.Go(func() error {
+		<-ctx.Done()
+		if _, err := connection.Write([]byte("bye")); err != nil {
+			if !errors.Is(err, net.ErrClosed) {
+				log.Printf("failed to write 'bye' message: %v", err)
+			}
 		}
-	}()
-	return s.baseSender.Start()
+		return connection.Close()
+	})
+	return wg.Wait()
 }
 
-func (s *UDPSender) readRTCPFromNetwork() error {
+func (s *UDPSender) readRTCPFromNetwork(transport io.Reader) error {
 	buf := make([]byte, 1500)
 	for {
-		n, err := s.transport.Read(buf)
+		n, err := transport.Read(buf)
 		if err != nil {
-			if e, ok := err.(net.Error); ok && !e.Temporary() {
-				log.Printf("failed to read from transport: %v (non-temporary, exiting read routine)", err)
-				return err
+			if errors.Is(err, net.ErrClosed) {
+				return nil
 			}
-			log.Printf("failed to read from transport: %v", err)
+			return err
 		}
-		s.rtcpChan <- rtcpFeedback{
+		select {
+		case s.rtcpChan <- rtcpFeedback{
 			buf:        buf[:n],
 			attributes: nil,
+		}:
+		default:
+			log.Println("RTCP buffer full, dropping packet")
 		}
 	}
 }

@@ -6,6 +6,15 @@ import (
 	"syscall"
 )
 
+func listenTCP(addr string) (*net.TCPListener, error) {
+	// TODO: Setup CC alogithm?
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return net.ListenTCP("tcp", tcpAddr)
+}
+
 func connectTCP(addr string, cc CongestionControlAlgorithm) (*net.TCPConn, error) {
 	dialer := &net.Dialer{
 		Control: func(_, _ string, c syscall.RawConn) error {

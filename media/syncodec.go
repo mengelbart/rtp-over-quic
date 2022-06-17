@@ -1,9 +1,7 @@
 package media
 
 import (
-	"fmt"
 	"log"
-	"strings"
 
 	"github.com/mengelbart/syncodec"
 	"github.com/pion/interceptor"
@@ -24,21 +22,6 @@ type SyncodecSource struct {
 	codec         syncodec.Codec
 	rtpWriter     interceptor.RTPWriter
 	packetizer    rtp.Packetizer
-}
-
-func payloaderForCodec(codec string) (rtp.Payloader, error) {
-	switch strings.ToLower(codec) {
-	case strings.ToLower(H264):
-		return &codecs.H264Payloader{}, nil
-	case strings.ToLower(VP8):
-		return &codecs.VP8Payloader{
-			EnablePictureID: true,
-		}, nil
-	case strings.ToLower(VP9):
-		return &codecs.VP9Payloader{}, nil
-	default:
-		return nil, fmt.Errorf("no payloader for codec %v available", codec)
-	}
 }
 
 func NewSyncodecSource(rtpWriter interceptor.RTPWriter, opts ...ConfigOption) (*SyncodecSource, error) {
@@ -84,12 +67,28 @@ func (s *SyncodecSource) Play() error {
 	return nil
 }
 
-func (s *SyncodecSource) Stop() {
-	if err := s.codec.Close(); err != nil {
-		log.Printf("WARNING: error on closing codec: %v", err)
-	}
+func (s *SyncodecSource) Stop() error {
+	return s.codec.Close()
 }
 
 func (s *SyncodecSource) SetTargetBitrate(r uint) {
 	s.codec.SetTargetBitrate(int(r))
+}
+
+type SyncodecSink struct{}
+
+func NewSyncodecSink() (*SyncodecSink, error) {
+	return &SyncodecSink{}, nil
+}
+
+func (s *SyncodecSink) Write(b []byte) (int, error) {
+	return len(b), nil
+}
+
+func (s *SyncodecSink) Stop() error {
+	return nil
+}
+
+func (s *SyncodecSink) Play() error {
+	return nil
 }

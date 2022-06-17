@@ -1,10 +1,16 @@
 package controller
 
 import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -14,7 +20,34 @@ import (
 	"github.com/lucas-clemente/quic-go/qlog"
 )
 
+const rtpOverQUICALPN = "rtp-mux-quic"
+
+func listenQUIC(
+	addr string,
+	cc CongestionControlAlgorithm,
+	qlogDirectoryName string,
+	sslKeyLogFileName string,
+) (quic.Listener, error) {
+	qlogWriter, err := getQLOGTracer(qlogDirectoryName)
+	if err != nil {
+		return nil, err
+	}
+	keyLogger, err := getKeyLogger(sslKeyLogFileName)
+	if err != nil {
+		return nil, err
+	}
+	quicConf := &quic.Config{
+		EnableDatagrams:      true,
+		HandshakeIdleTimeout: 15 * time.Second,
+		Tracer:               qlogWriter,
+		DisableCC:            cc != Reno,
+	}
+	tlsConf := generateTLSConfig(keyLogger)
+	return quic.ListenAddr(addr, tlsConf, quicConf)
+}
+
 func connectQUIC(
+	ctx context.Context,
 	addr string,
 	cc CongestionControlAlgorithm,
 	metricsTracer logging.Tracer,
@@ -32,7 +65,7 @@ func connectQUIC(
 	tlsConf := &tls.Config{
 		KeyLogWriter:       keyLogger,
 		InsecureSkipVerify: true,
-		NextProtos:         []string{"rtq"},
+		NextProtos:         []string{rtpOverQUICALPN},
 	}
 	tracers := []logging.Tracer{metricsTracer}
 	if qlogWriter != nil {
@@ -45,7 +78,7 @@ func connectQUIC(
 		Tracer:               tracer,
 		DisableCC:            cc != Reno,
 	}
-	session, err := quic.DialAddr(addr, tlsConf, quicConf)
+	session, err := quic.DialAddrContext(ctx, addr, tlsConf, quicConf)
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +125,31 @@ func getKeyLogger(keyLogFile string) (io.Writer, error) {
 		return nil, err
 	}
 	return keyLogger, nil
+}
+
+// Setup a bare-bones TLS config for the server
+func generateTLSConfig(keyLogWriter io.Writer) *tls.Config {
+	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		panic(err)
+	}
+	template := x509.Certificate{SerialNumber: big.NewInt(1)}
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		panic(err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+
+	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		panic(err)
+	}
+	return &tls.Config{
+		KeyLogWriter: keyLogWriter,
+		Certificates: []tls.Certificate{tlsCert},
+		NextProtos:   []string{rtpOverQUICALPN},
+	}
 }
 
 type nopCloser struct {

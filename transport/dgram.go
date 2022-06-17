@@ -39,6 +39,6 @@ func (t *Dgram) WriteWithAckLossCallback(buf []byte, cb func(bool)) (int, error)
 	return len(buf), t.conn.SendMessage(buf, nil, cb)
 }
 
-func (t *Dgram) AddFlow(f *Flow) {
+func (t *Dgram) AddFlow(f *RTPFlow) {
 	f.Bind(t)
 }

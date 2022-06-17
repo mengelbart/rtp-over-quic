@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"log"
 	"os"
 	"runtime/pprof"
@@ -29,6 +30,8 @@ var (
 	blockProfile     string
 	mutexProfile     string
 )
+
+var errInvalidTransport = errors.New("unknown transport protocol")
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&transport, "transport", "quic", "Transport protocol to use: quic, udp or tcp")
@@ -66,7 +69,11 @@ func Execute() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer done()
+	defer func() {
+		if err := done(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}

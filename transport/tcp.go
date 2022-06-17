@@ -41,6 +41,6 @@ func (t *TCP) Read(buf []byte) (int, error) {
 	return n, nil
 }
 
-func (t *TCP) AddFlow(f *Flow) {
+func (t *TCP) AddFlow(f *RTPFlow) {
 	f.Bind(t)
 }

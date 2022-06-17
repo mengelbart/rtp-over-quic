@@ -10,6 +10,7 @@ const (
 	BBR
 	SCReAM
 	GCC
+	NONE
 )
 
 func CongestionControlAlgorithmFromString(a string) CongestionControlAlgorithm {
@@ -24,6 +25,8 @@ func CongestionControlAlgorithmFromString(a string) CongestionControlAlgorithm {
 		return SCReAM
 	case "gcc":
 		return GCC
+	case "none":
+		return NONE
 	default:
 		log.Printf("warning, unknown algorithm: %v, using default ('reno')", a)
 		return Reno
@@ -42,8 +45,10 @@ func (a CongestionControlAlgorithm) String() string {
 		return "scream"
 	case GCC:
 		return "gcc"
+	case NONE:
+		return "none"
 	default:
-		log.Printf("warning, undefined algorithm: %v", a)
+		log.Printf("warning, undefined algorithm: %v", int(a))
 		return "none"
 	}
 }

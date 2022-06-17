@@ -16,7 +16,7 @@ func NewStreamTransportWithConn(conn quic.Connection) *Stream {
 	}
 }
 
-func (s *Stream) AddFlow(f *Flow) {
+func (s *Stream) AddFlow(f *RTPFlow) {
 	f.Bind(s)
 }
 

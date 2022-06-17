@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -48,89 +49,62 @@ func startSender() error {
 	if source == "syncodec" {
 		mediaFactory = SyncodecSourceFactory(mediaOptions...)
 	}
-	options := []controller.Option{
-		controller.SetAddr(addr),
-		controller.SetRTPLogFileName(rtpDumpFile),
-		controller.SetRTCPLogFileName(rtcpDumpFile),
+	options := []controller.Option[controller.BaseSender]{
+		controller.SetAddr[controller.BaseSender](addr),
+		controller.SetRTPLogFileName[controller.BaseSender](rtpDumpFile),
+		controller.SetRTCPLogFileName[controller.BaseSender](rtcpDumpFile),
 		controller.SetCCLogFileName(ccDump),
-		controller.SetQLOGDirName(qlogDir),
-		controller.SetSSLKeyLogFileName(keyLogFile),
-		controller.SetQUICCongestionControlAlgorithm(controller.CongestionControlAlgorithmFromString(quicCC)),
-		controller.SetTCPCongestionControlAlgorithm(controller.CongestionControlAlgorithmFromString(tcpCongAlg)),
+		controller.SetQLOGDirName[controller.BaseSender](qlogDir),
+		controller.SetSSLKeyLogFileName[controller.BaseSender](keyLogFile),
+		controller.SetQUICCongestionControlAlgorithm[controller.BaseSender](controller.CongestionControlAlgorithmFromString(quicCC)),
+		controller.SetTCPCongestionControlAlgorithm[controller.BaseSender](controller.CongestionControlAlgorithmFromString(tcpCongAlg)),
 		controller.SetRTPCongestionControlAlgorithm(controller.CongestionControlAlgorithmFromString(rtpCC)),
 	}
 	if sendStream {
-		options = append(options, controller.EnableStream())
+		options = append(options, controller.EnableStream[controller.BaseSender]())
 	}
 	if localRFC8888 {
 		options = append(options, controller.EnableLocalRFC8888())
 	}
-	switch transport {
-	case "quic", "quic-dgram":
-		return runDgramSender(options, mediaFactory)
-	case "quic-stream":
-	case "udp":
-		return runUDPSender(options, mediaFactory)
-	case "tcp":
-		return runTCPSender(options, mediaFactory)
-	}
-	return nil
-}
 
-func runDgramSender(options []controller.Option, mf controller.MediaSourceFactory) error {
-	c, err := controller.NewQUICDgramSender(mf, options...)
+	var s Starter
+	s, err := getSender(transport, mediaFactory, options...)
 	if err != nil {
 		return err
 	}
-	defer c.Close()
-	errCh := make(chan error)
-	go func() {
-		if err := c.Start(); err != nil {
-			errCh <- err
-		}
-	}()
-	return waitUntilSignalOrDone(errCh)
-}
 
-func runUDPSender(options []controller.Option, mf controller.MediaSourceFactory) error {
-	c, err := controller.NewUDPSender(mf, options...)
-	if err != nil {
-		return err
-	}
-	defer c.Close()
-	errCh := make(chan error)
-	go func() {
-		if err := c.Start(); err != nil {
-			errCh <- err
-		}
-	}()
-	return waitUntilSignalOrDone(errCh)
-}
-
-func runTCPSender(options []controller.Option, mf controller.MediaSourceFactory) error {
-	c, err := controller.NewTCPSender(mf, options...)
-	if err != nil {
-		return err
-	}
-	defer c.Close()
-	errCh := make(chan error)
-	go func() {
-		if err := c.Start(); err != nil {
-			errCh <- err
-		}
-	}()
-	return waitUntilSignalOrDone(errCh)
-}
-
-func waitUntilSignalOrDone(errCh chan error) error {
+	ctx, cancel := context.WithCancel(context.Background())
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	select {
-	case err := <-errCh:
-		return err
-	case <-sigs:
-		return nil
+	defer func() {
+		signal.Stop(sigs)
+		cancel()
+	}()
+	go func() {
+		select {
+		case <-sigs:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return s.Start(ctx)
+}
+
+type Starter interface {
+	Start(ctx context.Context) error
+}
+
+func getSender(transport string, mf controller.MediaSourceFactory, options ...controller.Option[controller.BaseSender]) (Starter, error) {
+	switch transport {
+	case "quic", "quic-dgram":
+		return controller.NewQUICDgramSender(mf, options...)
+	case "quic-stream":
+	case "udp":
+		return controller.NewUDPSender(mf, options...)
+	case "tcp":
+		return controller.NewTCPSender(mf, options...)
 	}
+	return nil, errInvalidTransport
 }
 
 type mediaSourceFactoryFunc func(interceptor.RTPWriter) (controller.MediaSource, error)

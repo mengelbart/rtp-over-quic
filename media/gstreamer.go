@@ -2,11 +2,17 @@ package media
 
 import (
 	"fmt"
+	"io"
+	"sync"
 
+	gstsink "github.com/mengelbart/gst-go/gstreamer-sink"
 	gstsrc "github.com/mengelbart/gst-go/gstreamer-src"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtp"
 )
+
+var srcMainLoop sync.Once
+var sinkMainLoop sync.Once
 
 type GstreamerSource struct {
 	Config
@@ -16,6 +22,9 @@ type GstreamerSource struct {
 }
 
 func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, opts ...ConfigOption) (*GstreamerSource, error) {
+	srcMainLoop.Do(func() {
+		go gstsrc.StartMainLoop()
+	})
 	if len(src) == 0 {
 		return nil, fmt.Errorf("invalid source string: %v, use 'videotestsrc' or a valid filename instead", src)
 	}
@@ -47,13 +56,15 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, opts ...Con
 }
 
 func (s *GstreamerSource) Play() error {
-	go gstsrc.StartMainLoop()
 	go s.pipeline.Start()
 
-	buf := make([]byte, 2<<16)
+	buf := make([]byte, 1500)
 	for {
 		n, err := s.pipeline.Read(buf)
 		if err != nil {
+			if err == io.EOF || err == io.ErrClosedPipe {
+				return nil
+			}
 			return err
 		}
 		var pkt rtp.Packet
@@ -68,11 +79,50 @@ func (s *GstreamerSource) Play() error {
 	}
 }
 
-func (s *GstreamerSource) Stop() {
-	s.pipeline.Stop()
-	s.pipeline.Destroy()
+func (s *GstreamerSource) Stop() error {
+	return s.pipeline.Close()
 }
 
 func (s *GstreamerSource) SetTargetBitrate(bitrate uint) {
 	s.pipeline.SetBitRate(bitrate)
+}
+
+type GstreamerSink struct {
+	Config
+	io.Writer
+	dst      string
+	pipeline *gstsink.Pipeline
+}
+
+func NewGstreamerSink(dst string, opts ...ConfigOption) (*GstreamerSink, error) {
+	sinkMainLoop.Do(func() {
+		go gstsink.StartMainLoop()
+	})
+	c, err := newConfig(opts...)
+	if err != nil {
+		return nil, err
+	}
+	s := &GstreamerSink{
+		Config: *c,
+		dst:    dst,
+	}
+	p, err := gstsink.NewPipeline(s.codec, s.dst)
+	if err != nil {
+		return nil, err
+	}
+	s.pipeline = p
+	return s, nil
+}
+
+func (s *GstreamerSink) Play() error {
+	go s.pipeline.Start()
+	return nil
+}
+
+func (s *GstreamerSink) Stop() error {
+	return s.pipeline.Close()
+}
+
+func (s *GstreamerSink) Write(buf []byte) (int, error) {
+	return s.pipeline.Write(buf)
 }

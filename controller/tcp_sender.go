@@ -1,77 +1,68 @@
 package controller
 
 import (
-	"log"
+	"context"
+	"errors"
+	"io"
 	"net"
 
 	"github.com/mengelbart/rtp-over-quic/transport"
+	"golang.org/x/sync/errgroup"
 )
 
 type TCPSender struct {
-	baseSender
-
-	connection *net.TCPConn
-	transport  *transport.TCP
+	BaseSender
 }
 
-func NewTCPSender(media MediaSourceFactory, opts ...Option) (*TCPSender, error) {
+func NewTCPSender(media MediaSourceFactory, opts ...Option[BaseSender]) (*TCPSender, error) {
 	bs, err := newBaseSender(media, opts...)
 	if err != nil {
 		return nil, err
 	}
-	connection, err := connectTCP(bs.addr, bs.tcpCC)
+	return &TCPSender{
+		BaseSender: *bs,
+	}, nil
+}
+
+func (s *TCPSender) Start(ctx context.Context) error {
+	connection, err := connectTCP(s.addr, s.tcpCC)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	s := &TCPSender{
-		connection: connection,
-		transport:  transport.NewTCPTransportWithConn(connection),
-		baseSender: *bs,
-	}
-	s.flow.Bind(s.transport)
-	return s, nil
+	t := transport.NewTCPTransportWithConn(connection)
+	s.flow.Bind(t)
+
+	wg, ctx := errgroup.WithContext(ctx)
+
+	wg.Go(func() error {
+		return s.readRTCPFromNetwork(t)
+	})
+
+	wg.Go(func() error {
+		return s.BaseSender.Start(ctx)
+	})
+
+	wg.Go(func() error {
+		<-ctx.Done()
+		return connection.Close()
+	})
+
+	return wg.Wait()
 }
 
-func (s *TCPSender) Start() error {
-	errCh := make(chan error)
-	go func() {
-		if err := s.readRTCPFromNetwork(); err != nil {
-			errCh <- err
-		}
-	}()
-	go func() {
-		if err := s.baseSender.Start(); err != nil {
-			errCh <- err
-		}
-	}()
-	err := <-errCh
-	return err
-}
-
-func (s *TCPSender) readRTCPFromNetwork() error {
+func (s *TCPSender) readRTCPFromNetwork(transport io.Reader) error {
 	buf := make([]byte, 1500)
 	for {
-		n, err := s.transport.Read(buf)
+		n, err := transport.Read(buf)
 		if err != nil {
-			if e, ok := err.(net.Error); ok && !e.Temporary() {
-				log.Printf("failed to read from transport: %v (non-temporary, exiting read routine)", err)
-				return err
+			if errors.Is(err, net.ErrClosed) {
+				return nil
 			}
-			log.Printf("failed to read from transport: %v", err)
+			return err
 		}
 		s.rtcpChan <- rtcpFeedback{
 			buf:        buf[:n],
 			attributes: nil,
 		}
 	}
-}
-
-func (s *TCPSender) Close() error {
-	if err := s.flow.Close(); err != nil {
-		return err
-	}
-	if err := s.baseSender.Close(); err != nil {
-		return err
-	}
-	return s.connection.Close()
 }

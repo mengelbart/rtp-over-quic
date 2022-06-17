@@ -1,20 +1,14 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
-	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
-	"github.com/lucas-clemente/quic-go/logging"
-	"github.com/lucas-clemente/quic-go/qlog"
-	gstsink "github.com/mengelbart/gst-go/gstreamer-sink"
-	"github.com/mengelbart/rtp-over-quic/rtc"
+	"github.com/mengelbart/rtp-over-quic/controller"
+	"github.com/mengelbart/rtp-over-quic/media"
 	"github.com/spf13/cobra"
 )
 
@@ -24,10 +18,52 @@ var (
 )
 
 func init() {
-	go gstsink.StartMainLoop()
 	rootCmd.AddCommand(receiveCmd)
+
 	receiveCmd.Flags().StringVar(&sink, "sink", "autovideosink", "Media sink")
+	receiveCmd.Flags().StringVar(&rtcpFeedback, "rtcp-feedback", "none", "RTCP Congestion Control Feedback to send ('none', 'rfc8888', 'rfc8888-pion', 'twcc')")
 }
+
+type RTCPFeedback int
+
+func (f RTCPFeedback) String() string {
+	switch f {
+	case RTCP_NONE:
+		return "none"
+	case RTCP_RFC8888:
+		return "rfc8888"
+	case RTCP_RFC8888_PION:
+		return "rfc8888-pion"
+	case RTCP_TWCC:
+		return "twcc"
+	default:
+		log.Printf("WARNING: unknown RTCP Congestion Control Feedback type: %v, using default ('none')\n", int(f))
+		return "none"
+	}
+}
+
+func getRTCP(choice string) RTCPFeedback {
+	switch choice {
+	case "none":
+		return RTCP_NONE
+	case "rfc8888":
+		return RTCP_RFC8888
+	case "rfc8888-pion":
+		return RTCP_RFC8888_PION
+	case "twcc":
+		return RTCP_TWCC
+	default:
+		log.Printf("WARNING: unknown RTCP Congestion Control Feedback type: %v, using default ('none')\n", choice)
+		return RTCP_NONE
+	}
+}
+
+const (
+	RTCP_NONE RTCPFeedback = iota
+	RTCP_RFC8888
+	RTCP_RFC8888_PION
+	RTCP_TWCC
+)
 
 var receiveCmd = &cobra.Command{
 	Use: "receive",
@@ -39,201 +75,80 @@ var receiveCmd = &cobra.Command{
 }
 
 func startReceiver() error {
-	rtpDumpFile, err := getLogFile(rtpDumpFile)
+	mediaOptions := []media.ConfigOption{
+		media.Codec(codec),
+	}
+	mediaFactory := GstreamerSinkFactory(sink, mediaOptions...)
+	if sink == "syncodec" {
+		mediaFactory = SyncodecSinkFactory()
+	}
+	options := []controller.Option[controller.BaseServer]{
+		controller.SetAddr[controller.BaseServer](addr),
+		controller.SetRTPLogFileName[controller.BaseServer](rtpDumpFile),
+		controller.SetRTCPLogFileName[controller.BaseServer](rtcpDumpFile),
+		controller.SetQLOGDirName[controller.BaseServer](qlogDir),
+		controller.SetSSLKeyLogFileName[controller.BaseServer](keyLogFile),
+	}
+	if getRTCP(rtcpFeedback) == RTCP_RFC8888 {
+		options = append(options, controller.EnableRFC8888())
+	}
+	if getRTCP(rtcpFeedback) == RTCP_RFC8888_PION {
+		options = append(options, controller.EnableRFC8888Pion())
+	}
+	if getRTCP(rtcpFeedback) == RTCP_TWCC {
+		options = append(options, controller.EnableTWCC())
+	}
+
+	var s Starter
+	s, err := getServer(transport, mediaFactory, options...)
 	if err != nil {
 		return err
 	}
-	defer rtpDumpFile.Close()
 
-	rtcpDumpfile, err := getLogFile(rtcpDumpFile)
-	if err != nil {
-		return err
-	}
-	defer rtcpDumpfile.Close()
-
-	c := rtc.ReceiverConfig{
-		RTPDump:  rtpDumpFile,
-		RTCPDump: rtcpDumpfile,
-		Feedback: getRTCP(rtcpFeedback),
-	}
-
-	receiverFactory, err := rtc.GstreamerReceiverFactory(c)
-	if err != nil {
-		return err
-	}
-	tracer, err := getQLOGTracer(qlogDir)
-	if err != nil {
-		return err
-	}
-
-	var mediaSink rtc.MediaSinkFactory = func() (rtc.MediaSink, error) {
-		return nopCloser{io.Discard}, nil
-	}
-	if codec != "syncodec" {
-		mediaSink = gstSinkFactory(codec, sink)
-	}
-
-	errCh := make(chan error)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	switch transport {
-	case "quic":
-		server, err := rtc.NewServer(receiverFactory, addr, mediaSink, tracer)
-		if err != nil {
-			return err
-		}
-		defer server.Close()
-
-		go func() {
-			errCh <- server.Listen(ctx)
-		}()
-
-	case "udp":
-		server, err := rtc.NewUDPServer(receiverFactory, addr, mediaSink)
-		if err != nil {
-			return err
-		}
-
-		defer server.Close()
-
-		go func() {
-			errCh <- server.Listen(ctx)
-		}()
-
-	case "tcp":
-		server, err := rtc.NewTCPServer(receiverFactory, addr, mediaSink)
-		if err != nil {
-			return err
-		}
-
-		defer server.Close()
-
-		go func() {
-			errCh <- server.Listen(ctx)
-		}()
-	default:
-		return fmt.Errorf("unknown transport protocol: %v", transport)
-	}
-
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	select {
-	case err := <-errCh:
-		return err
-	case <-sigs:
-		return nil
-	}
-}
-
-func getRTCP(choice string) rtc.RTCPFeedback {
-	switch choice {
-	case "none":
-		return rtc.RTCP_NONE
-	case "rfc8888":
-		return rtc.RTCP_RFC8888
-	case "rfc8888-pion":
-		return rtc.RTCP_RFC8888_PION
-	case "twcc":
-		return rtc.RTCP_TWCC
-	default:
-		log.Printf("WARNING: unknown RTCP Congestion Control Feedback type: %v, using default ('none')\n", choice)
-		return rtc.RTCP_NONE
-	}
-}
-
-func gstSinkFactory(codec string, dst string) rtc.MediaSinkFactory {
-	if dst != "autovideosink" {
-		dst = fmt.Sprintf("clocksync ! y4menc ! filesink location=%v", dst)
-	} else {
-		dst = "clocksync ! autovideosink"
-	}
-	return func() (rtc.MediaSink, error) {
-		dstPipeline, err := gstsink.NewPipeline(codec, dst)
-		if err != nil {
-			return nil, err
+	defer func() {
+		signal.Stop(sigs)
+		cancel()
+	}()
+	go func() {
+		select {
+		case <-sigs:
+			cancel()
+		case <-ctx.Done():
 		}
-		log.Printf("run gstreamer pipeline: [%v]", dstPipeline.String())
-		dstPipeline.Start()
-		return dstPipeline, nil
-	}
+	}()
+	return s.Start(ctx)
 }
 
-type nopCloser struct {
-	io.Writer
+func getServer(transport string, mf controller.MediaSinkFactory, options ...controller.Option[controller.BaseServer]) (Starter, error) {
+	switch transport {
+	case "quic", "quic-dgram":
+		return controller.NewQUICServer(mf, options...)
+	case "quic-stream":
+	case "udp":
+		return controller.NewUDPServer(mf, options...)
+	case "tcp":
+		return controller.NewTCPServer(mf, options...)
+	}
+	return nil, errInvalidTransport
 }
 
-func (nopCloser) Close() error { return nil }
+type mediaSinkFactoryFunc func() (controller.MediaSink, error)
 
-func discardingSinkFactory() rtc.MediaSinkFactory {
-	return func() (rtc.MediaSink, error) {
-		return nopCloser{io.Discard}, nil
-	}
+func (f mediaSinkFactoryFunc) Create() (controller.MediaSink, error) {
+	return f()
 }
 
-type fileCloser struct {
-	f   *os.File
-	buf *bufio.Writer
+func GstreamerSinkFactory(sink string, opts ...media.ConfigOption) controller.MediaSinkFactory {
+	return mediaSinkFactoryFunc(func() (controller.MediaSink, error) {
+		return media.NewGstreamerSink(sink, opts...)
+	})
 }
 
-func (f *fileCloser) Write(buf []byte) (int, error) {
-	return f.f.Write(buf)
-}
-
-func (f *fileCloser) Close() error {
-	if err := f.buf.Flush(); err != nil {
-		log.Printf("failed to flush: %v\n", err)
-	}
-	return f.f.Close()
-}
-
-func getLogFile(file string) (io.WriteCloser, error) {
-	if len(file) == 0 {
-		return nopCloser{io.Discard}, nil
-	}
-	if file == "stdout" {
-		return nopCloser{os.Stdout}, nil
-	}
-	fd, err := os.Create(file)
-	if err != nil {
-		return nil, err
-	}
-	bufwriter := bufio.NewWriterSize(fd, 4096)
-
-	return &fileCloser{
-		f:   fd,
-		buf: bufwriter,
-	}, nil
-}
-
-func getQLOGTracer(path string) (logging.Tracer, error) {
-	if len(path) == 0 {
-		return nil, nil
-	}
-	if path == "stdout" {
-		return qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
-			return nopCloser{os.Stdout}
-		}), nil
-	}
-	_, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if err = os.MkdirAll(path, 0o666); err != nil {
-				return nil, fmt.Errorf("failed to create qlog dir %s: %v", path, err)
-			}
-		} else {
-			return nil, err
-		}
-	}
-	return qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
-		file := fmt.Sprintf("%s/%x_%v.qlog", strings.TrimRight(path, "/"), connectionID, p)
-		w, err := os.Create(file)
-		if err != nil {
-			log.Printf("failed to create qlog file %s: %v", path, err)
-			return nil
-		}
-		log.Printf("created qlog file: %s\n", path)
-		return w
-	}), nil
+func SyncodecSinkFactory(opts ...media.Config) controller.MediaSinkFactory {
+	return mediaSinkFactoryFunc(func() (controller.MediaSink, error) {
+		return media.NewSyncodecSink()
+	})
 }

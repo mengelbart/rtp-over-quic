@@ -12,6 +12,22 @@ import (
 
 const desiredReceiveBufferSize = (1 << 20) * 2 // 2 MB
 
+func listenUDP(addr string) (*net.UDPConn, error) {
+	a, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := net.ListenUDP("udp", a)
+	if err != nil {
+		return nil, err
+	}
+	if err = SetReceiveBuffer(conn); err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
 func connectUDP(addr string) (*net.UDPConn, error) {
 	a, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
@@ -53,7 +69,6 @@ func SetReceiveBuffer(c net.PacketConn) error {
 	if newSize < desiredReceiveBufferSize {
 		return fmt.Errorf("failed to sufficiently increase receive buffer size (was: %d kiB, wanted: %d kiB, got: %d kiB)", size/1024, desiredReceiveBufferSize/1024, newSize/1024)
 	}
-	log.Printf("Increased receive buffer size to %d kiB", newSize/1024)
 	return nil
 }
 

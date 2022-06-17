@@ -12,6 +12,6 @@ func NewUDPTransportWithConn(conn *net.UDPConn) *UDP {
 	}
 }
 
-func (u *UDP) AddFlow(f *Flow) {
+func (u *UDP) AddFlow(f *RTPFlow) {
 	f.Bind(u)
 }

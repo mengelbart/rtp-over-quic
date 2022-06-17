@@ -1,8 +1,8 @@
 package transport
 
 import (
+	"context"
 	"sort"
-	"sync"
 	"time"
 
 	screamcgo "github.com/mengelbart/scream-go"
@@ -53,8 +53,6 @@ type localRFC8888Generator struct {
 	reportCB  func(Feedback)
 	ackedPkts chan ackedPkt
 	t0        float64
-	close     chan struct{}
-	wg        sync.WaitGroup
 }
 
 func newLocalRFC8888Generator(ssrc uint32, m Metricer, reportCB func(Feedback)) *localRFC8888Generator {
@@ -64,8 +62,6 @@ func newLocalRFC8888Generator(ssrc uint32, m Metricer, reportCB func(Feedback)) 
 		reportCB:  reportCB,
 		ackedPkts: make(chan ackedPkt),
 		t0:        getNTPT0(),
-		close:     make(chan struct{}),
-		wg:        sync.WaitGroup{},
 	}
 }
 
@@ -77,10 +73,7 @@ func (f *localRFC8888Generator) ack(pkt ackedPkt) {
 	f.ackedPkts <- pkt
 }
 
-func (f *localRFC8888Generator) Run() {
-	f.wg.Add(1)
-	defer f.wg.Done()
-
+func (f *localRFC8888Generator) Run(ctx context.Context) {
 	t := time.NewTicker(10 * time.Millisecond)
 	var buf []ackedPkt
 	for {
@@ -114,25 +107,8 @@ func (f *localRFC8888Generator) Run() {
 				})
 			}
 
-		case <-f.close:
+		case <-ctx.Done():
 			return
 		}
 	}
-}
-
-func (f *localRFC8888Generator) isClosed() bool {
-	select {
-	case <-f.close:
-		return true
-	default:
-		return false
-	}
-}
-
-func (f *localRFC8888Generator) Close() error {
-	defer f.wg.Wait()
-	if !f.isClosed() {
-		close(f.close)
-	}
-	return nil
 }
