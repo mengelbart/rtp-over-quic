@@ -126,7 +126,7 @@ func getServer(transport string, mf controller.MediaSinkFactory, options ...cont
 	case "quic", "quic-dgram":
 		return controller.NewQUICServer(mf, false, options...)
 	case "quic-stream":
-		options = append(options, controller.MTU[controller.BaseServer](65_000))
+		options = append(options, controller.MTU[controller.BaseServer](1_000_000))
 		return controller.NewQUICServer(mf, true, options...)
 	case "udp":
 		return controller.NewUDPServer(mf, options...)

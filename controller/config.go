@@ -63,6 +63,18 @@ type Option[T BaseSender | BaseServer] func(*T) error
 // If this constrained will be removed at some point, we can clean this up
 // again.
 
+func InitialRate[T BaseSender](rate int) Option[T] {
+	return func(s *T) error {
+		switch x := any(s).(type) {
+		case *BaseSender:
+			x.initialTargetRate = rate
+		default:
+			return errInvalidOption
+		}
+		return nil
+	}
+}
+
 func MTU[T BaseSender | BaseServer](mtu uint) Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {

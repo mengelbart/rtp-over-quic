@@ -17,8 +17,9 @@ import (
 type BaseSender struct {
 	// config
 	commonBaseConfig
-	rtpCC        CongestionControlAlgorithm
-	localRFC8888 bool
+	rtpCC             CongestionControlAlgorithm
+	initialTargetRate int
+	localRFC8888      bool
 
 	ccLogFileName string
 
@@ -49,16 +50,17 @@ func newBaseSender(media MediaSourceFactory, opts ...Option[BaseSender]) (*BaseS
 			rtpLogFileName:    "",
 			rtcpLogFileName:   "",
 		},
-		rtpCC:         0,
-		localRFC8888:  false,
-		ccLogFileName: "",
-		registry:      &interceptor.Registry{},
-		ccLogFile:     nil,
-		flow:          transport.NewRTPFlow(),
-		mediaFactory:  media,
-		media:         nil,
-		bweChan:       make(chan scream.BandwidthEstimator),
-		rtcpChan:      make(chan rtcpFeedback),
+		rtpCC:             NONE,
+		initialTargetRate: 100_000,
+		localRFC8888:      false,
+		ccLogFileName:     "",
+		registry:          &interceptor.Registry{},
+		ccLogFile:         nil,
+		flow:              transport.NewRTPFlow(),
+		mediaFactory:      media,
+		media:             nil,
+		bweChan:           make(chan scream.BandwidthEstimator),
+		rtcpChan:          make(chan rtcpFeedback),
 	}
 	for _, opt := range opts {
 		if err := opt(c); err != nil {
@@ -71,7 +73,7 @@ func newBaseSender(media MediaSourceFactory, opts ...Option[BaseSender]) (*BaseS
 		}
 	}
 	if c.rtpCC == SCReAM {
-		if err := registerSCReAM(c.registry, c.onNewSCrEAMEstimator); err != nil {
+		if err := registerSCReAM(c.registry, c.onNewSCrEAMEstimator, c.initialTargetRate); err != nil {
 			return nil, err
 		}
 	}

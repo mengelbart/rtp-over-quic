@@ -18,8 +18,9 @@ var (
 	ccDump string
 	rtpCC  string
 
-	sendStream   bool
-	localRFC8888 bool
+	sendStream           bool
+	localRFC8888         bool
+	initialTargetBitrate uint
 )
 
 func init() {
@@ -28,6 +29,7 @@ func init() {
 	sendCmd.Flags().StringVar(&source, "source", "videotestsrc", "Media source")
 	sendCmd.Flags().StringVar(&ccDump, "cc-dump", "", "Congestion Control log file, use 'stdout' for Stdout")
 	sendCmd.Flags().StringVar(&rtpCC, "rtp-cc", "none", "RTP congestion control algorithm. ('none', 'scream', 'gcc')")
+	sendCmd.Flags().UintVar(&initialTargetBitrate, "target", 100_000, "Initial media target bitrate")
 	sendCmd.Flags().BoolVar(&localRFC8888, "local-rfc8888", false, "Generate local RFC 8888 feedback")
 	sendCmd.Flags().BoolVar(&sendStream, "stream", false, "Send random data on a stream")
 }
@@ -44,9 +46,10 @@ var sendCmd = &cobra.Command{
 func startSender() error {
 	mediaOptions := []media.ConfigOption{
 		media.Codec(codec),
+		media.InitialTargetBitrate(initialTargetBitrate),
 	}
 	if transport == "quic-stream" {
-		mediaOptions = append(mediaOptions, media.MTU(65_000))
+		mediaOptions = append(mediaOptions, media.MTU(1_000_000))
 	}
 	mediaFactory := GstreamerSourceFactory(source, mediaOptions...)
 	if source == "syncodec" {
@@ -62,6 +65,7 @@ func startSender() error {
 		controller.SetQUICCongestionControlAlgorithm[controller.BaseSender](controller.CongestionControlAlgorithmFromString(quicCC)),
 		controller.SetTCPCongestionControlAlgorithm[controller.BaseSender](controller.CongestionControlAlgorithmFromString(tcpCongAlg)),
 		controller.SetRTPCongestionControlAlgorithm(controller.CongestionControlAlgorithmFromString(rtpCC)),
+		controller.InitialRate(int(initialTargetBitrate)),
 	}
 	if sendStream {
 		options = append(options, controller.EnableStream[controller.BaseSender]())
