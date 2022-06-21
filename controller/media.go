@@ -9,7 +9,7 @@ import (
 type MediaSource interface {
 	Play() error
 	Stop() error
-	SetTargetBitrate(uint)
+	SetTargetBitsPerSecond(uint)
 }
 
 type MediaSourceFactory interface {

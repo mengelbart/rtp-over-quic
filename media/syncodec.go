@@ -71,7 +71,7 @@ func (s *SyncodecSource) Stop() error {
 	return s.codec.Close()
 }
 
-func (s *SyncodecSource) SetTargetBitrate(r uint) {
+func (s *SyncodecSource) SetTargetBitsPerSecond(r uint) {
 	s.codec.SetTargetBitrate(int(r))
 }
 

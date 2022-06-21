@@ -41,3 +41,5 @@ require (
 replace github.com/lucas-clemente/quic-go v0.24.0 => github.com/mengelbart/quic-go v0.7.1-0.20220513091845-f978d053c86f
 
 replace github.com/pion/interceptor/rfc8888 v0.1.11 => github.com/pion/interceptor v0.1.12-0.20220517194555-ddfc2aabce2b
+
+replace github.com/mengelbart/gst-go v0.0.0-20220617162911-f1ceefa58ae7 => github.com/mengelbart/gst-go v0.0.0-20220621182741-c9cf9a19558e

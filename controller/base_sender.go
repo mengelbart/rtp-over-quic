@@ -184,7 +184,7 @@ func (s *BaseSender) OnBandwidthEstimationUpdate(id string, bwe cc.BandwidthEsti
 		log.Printf("got negative target bitrate: %v", target)
 		return
 	}
-	s.media.SetTargetBitrate(uint(target))
+	s.media.SetTargetBitsPerSecond(uint(target))
 }
 
 func (s *BaseSender) runBandwidthEstimation(ctx context.Context) {
@@ -224,7 +224,7 @@ func (s *BaseSender) runBandwidthEstimation(ctx context.Context) {
 				stats["rateAckedStream0"],
 				stats["hiSeqAckStream0"],
 			)
-			s.media.SetTargetBitrate(uint(target))
+			s.media.SetTargetBitsPerSecond(uint(target))
 		case <-ctx.Done():
 			return
 		}
