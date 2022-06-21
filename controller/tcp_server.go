@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"io"
 	"log"
 	"net"
 	"strconv"
@@ -81,7 +82,7 @@ func (s *TCPServer) handle(ctx context.Context, conn *net.TCPConn) error {
 	if err != nil {
 		return err
 	}
-	receiver.addIncomingFlow(0, i, sink, tcp)
+	receiver.addIncomingFlow(0, i, sink, []io.ReadWriter{tcp})
 	rtcpFlow := transport.NewRTCPFlow()
 	rtcpFlow.Bind(tcp)
 	i.BindRTCPWriter(rtcpFlow)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"log"
 	"net"
 	"net/netip"
@@ -146,7 +147,7 @@ func (s *UDPServer) route() {
 			receiver := newReceiver(s.mtu, demultiplexerFunc(func(pkt []byte) (uint64, []byte, error) {
 				return 0, pkt, nil
 			}))
-			receiver.addIncomingFlow(0, i, sink, client)
+			receiver.addIncomingFlow(0, i, sink, []io.ReadWriter{client})
 			rtcpFlow := transport.NewRTCPFlow()
 			rtcpFlow.Bind(client)
 			i.BindRTCPWriter(rtcpFlow)

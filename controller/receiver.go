@@ -9,6 +9,7 @@ import (
 
 	"github.com/lucas-clemente/quic-go"
 	"github.com/pion/interceptor"
+	"golang.org/x/sync/errgroup"
 )
 
 // demultiplexer inspects a packet buffer and returns the flow id to which the
@@ -35,7 +36,7 @@ type receiver struct {
 	incomingFlows map[uint64]interceptor.RTPReader
 
 	// TODO: Use list to allow multiple parallel transports?
-	transport io.ReadWriter
+	transports []io.ReadWriter
 }
 
 func newReceiver(mtu uint, d demultiplexer) *receiver {
@@ -45,15 +46,15 @@ func newReceiver(mtu uint, d demultiplexer) *receiver {
 		lock:          sync.Mutex{},
 		mediaSinks:    map[uint64]MediaSink{},
 		incomingFlows: map[uint64]interceptor.RTPReader{},
-		transport:     nil,
+		transports:    []io.ReadWriter{},
 	}
 }
 
-func (r *receiver) addIncomingFlow(id uint64, i interceptor.Interceptor, sink MediaSink, t io.ReadWriter) {
+func (r *receiver) addIncomingFlow(id uint64, i interceptor.Interceptor, sink MediaSink, ts []io.ReadWriter) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	r.transport = t
+	r.transports = append(r.transports, ts...)
 	if s, ok := r.mediaSinks[id]; ok {
 		if err := s.Stop(); err != nil {
 			log.Printf("failed to close existing sink: %v", err)
@@ -87,35 +88,43 @@ func (r *receiver) addIncomingFlow(id uint64, i interceptor.Interceptor, sink Me
 func (r *receiver) receive() error {
 	buf := make([]byte, r.mtu)
 
-	for {
-		n, err := r.transport.Read(buf)
-		if err != nil {
-			if e, ok := err.(*quic.ApplicationError); ok && e.ErrorCode == 0 {
-				return nil
-			}
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-			return err
-		}
-		id, packet, err := r.getFlow(buf[:n])
-		if err != nil {
-			log.Printf("failed to demultiplex packet: %v, dropping packet", err)
-			continue
-		}
-		r.lock.Lock()
-		flow, ok := r.incomingFlows[id]
-		r.lock.Unlock()
-		if !ok {
-			log.Printf("WARNING: no flow with ID %v found", id)
-		}
-		if !ok {
-			log.Printf("got flow with unknown flow ID: %v, dropping datagram", id)
-			continue
-		}
-		if _, _, err := flow.Read(packet, interceptor.Attributes{"timestamp": time.Now()}); err != nil {
-			log.Printf("failed to read RTP packet: %v", err)
-			return err
-		}
+	wg := errgroup.Group{}
+	for _, transport := range r.transports {
+		func(transport io.Reader) {
+			wg.Go(func() error {
+				for {
+					n, err := transport.Read(buf)
+					if err != nil {
+						if e, ok := err.(*quic.ApplicationError); ok && e.ErrorCode == 0 {
+							return nil
+						}
+						if errors.Is(err, io.EOF) {
+							return nil
+						}
+						return err
+					}
+					id, packet, err := r.getFlow(buf[:n])
+					if err != nil {
+						log.Printf("failed to demultiplex packet: %v, dropping packet", err)
+						continue
+					}
+					r.lock.Lock()
+					flow, ok := r.incomingFlows[id]
+					r.lock.Unlock()
+					if !ok {
+						log.Printf("WARNING: no flow with ID %v found", id)
+					}
+					if !ok {
+						log.Printf("got flow with unknown flow ID: %v, dropping datagram", id)
+						continue
+					}
+					if _, _, err := flow.Read(packet, interceptor.Attributes{"timestamp": time.Now()}); err != nil {
+						log.Printf("failed to read RTP packet: %v", err)
+						return err
+					}
+				}
+			})
+		}(transport)
 	}
+	return wg.Wait()
 }

@@ -17,17 +17,17 @@ import (
 
 type QUICServer struct {
 	BaseServer
-	isStreamServer bool
+	mode TransportMode
 }
 
-func NewQUICServer(mediaFactory MediaSinkFactory, isStreamServer bool, opts ...Option[BaseServer]) (*QUICServer, error) {
+func NewQUICServer(mediaFactory MediaSinkFactory, mode TransportMode, opts ...Option[BaseServer]) (*QUICServer, error) {
 	bs, err := newBaseServer(mediaFactory, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return &QUICServer{
-		BaseServer:     *bs,
-		isStreamServer: isStreamServer,
+		BaseServer: *bs,
+		mode:       mode,
 	}, nil
 }
 
@@ -71,12 +71,18 @@ func (s *QUICServer) handle(ctx context.Context, conn quic.Connection) error {
 			log.Printf("failed to close interceptor: %v", err1)
 		}
 	}()
-	var t io.ReadWriter
-	if s.isStreamServer {
-		t = transport.NewStreamTransportWithConn(conn)
-	}
-	if !s.isStreamServer {
-		t = transport.NewDgramTransportWithConn(conn)
+	var rtcpTransport io.ReadWriter
+	var rtpTransports []io.ReadWriter
+	switch s.mode {
+	case STREAM:
+		rtpTransports = append(rtpTransports, transport.NewStreamTransportWithConn(conn))
+	case DGRAM:
+		rtpTransports = append(rtpTransports, transport.NewDgramTransportWithConn(conn))
+	case PRIORITIZED:
+		st := transport.NewStreamTransportWithConn(conn)
+		dt := transport.NewDgramTransportWithConn(conn)
+		rtcpTransport = st
+		rtpTransports = append(rtpTransports, st, dt)
 	}
 	receiver := newReceiver(s.mtu, demultiplexerFunc(func(pkt []byte) (uint64, []byte, error) {
 		id, err1 := quicvarint.Read(bytes.NewReader(pkt))
@@ -90,9 +96,9 @@ func (s *QUICServer) handle(ctx context.Context, conn quic.Connection) error {
 	if err != nil {
 		return err
 	}
-	receiver.addIncomingFlow(0, i, sink, t)
+	receiver.addIncomingFlow(0, i, sink, rtpTransports)
 	rtcpFlow := transport.NewRTCPFlowWithID(0)
-	rtcpFlow.Bind(t)
+	rtcpFlow.Bind(rtcpTransport)
 	i.BindRTCPWriter(rtcpFlow)
 
 	wg, ctx := errgroup.WithContext(ctx)

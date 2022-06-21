@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log"
 
@@ -12,6 +13,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/pion/interceptor"
+	"github.com/pion/rtp"
+	"github.com/pion/rtp/codecs"
 )
 
 const transportCCURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
@@ -21,19 +24,27 @@ type rtcpFeedback struct {
 	attributes interceptor.Attributes
 }
 
+type TransportMode int
+
+const (
+	DGRAM TransportMode = iota
+	STREAM
+	PRIORITIZED
+)
+
 type QUICSender struct {
 	BaseSender
-	isStreamSender bool
+	TransportMode
 }
 
-func NewQUICSender(media MediaSourceFactory, isStreamSender bool, opts ...Option[BaseSender]) (*QUICSender, error) {
+func NewQUICSender(media MediaSourceFactory, mode TransportMode, opts ...Option[BaseSender]) (*QUICSender, error) {
 	bs, err := newBaseSender(media, append(opts, EnableFlowID(0))...)
 	if err != nil {
 		return nil, err
 	}
 	return &QUICSender{
-		BaseSender:     *bs,
-		isStreamSender: isStreamSender,
+		BaseSender:    *bs,
+		TransportMode: mode,
 	}, nil
 }
 
@@ -66,13 +77,32 @@ func (s *QUICSender) Start(ctx context.Context) error {
 	}
 	var t io.ReadWriter
 
-	if s.isStreamSender {
+	switch s.TransportMode {
+	case STREAM:
 		t = transport.NewStreamTransportWithConn(connection)
-	}
-	if !s.isStreamSender {
+		s.flow.Bind(t)
+	case DGRAM:
 		t = transport.NewDgramTransportWithConn(connection)
+		s.flow.Bind(t)
+	case PRIORITIZED:
+		st := transport.NewStreamTransportWithConn(connection)
+		dt := transport.NewDgramTransportWithConn(connection)
+		t = st
+		s.flow.BindPriority(0, 0, st)
+		s.flow.BindPriority(1, 0, dt)
+		s.flow.SetPrioritizer(transport.PrioritizerFunc(func(_ *rtp.Header, b []byte) int {
+			vp9Pkt := codecs.VP9Packet{}
+			if _, err := vp9Pkt.Unmarshal(b); err != nil {
+				panic(err)
+			}
+			if vp9Pkt.P {
+				return 1
+			}
+			return 0
+		}))
+	default:
+		return fmt.Errorf("unknown transport mode: %v", s.TransportMode)
 	}
-	s.flow.Bind(t)
 
 	g, ctx := errgroup.WithContext(ctx)
 

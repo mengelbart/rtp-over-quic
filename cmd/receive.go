@@ -124,10 +124,12 @@ func startReceiver() error {
 func getServer(transport string, mf controller.MediaSinkFactory, options ...controller.Option[controller.BaseServer]) (Starter, error) {
 	switch transport {
 	case "quic", "quic-dgram":
-		return controller.NewQUICServer(mf, false, options...)
+		return controller.NewQUICServer(mf, controller.DGRAM, options...)
 	case "quic-stream":
 		options = append(options, controller.MTU[controller.BaseServer](1_000_000))
-		return controller.NewQUICServer(mf, true, options...)
+		return controller.NewQUICServer(mf, controller.STREAM, options...)
+	case "quic-prio":
+		return controller.NewQUICServer(mf, controller.PRIORITIZED, options...)
 	case "udp":
 		return controller.NewUDPServer(mf, options...)
 	case "tcp":

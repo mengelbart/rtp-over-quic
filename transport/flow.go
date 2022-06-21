@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -95,20 +96,39 @@ func (f *RTCPFlow) Write(pkts []rtcp.Packet, attributes interceptor.Attributes) 
 	return f.write(buf)
 }
 
+type Prioritizer interface {
+	Prioritize(*rtp.Header, []byte) int
+}
+
+type PrioritizerFunc func(*rtp.Header, []byte) int
+
+func (p PrioritizerFunc) Prioritize(h *rtp.Header, b []byte) int {
+	return p(h, b)
+}
+
+var defaultPriorityFunc = PrioritizerFunc(func(h *rtp.Header, b []byte) int {
+	return 0
+})
+
 type RTPFlow struct {
-	*flow
+	prioritizer   Prioritizer
+	flows         map[int]*flow
 	localFeedback *localRFC8888Generator
 }
 
 func NewRTPFlow() *RTPFlow {
+	f := newFlow()
 	return &RTPFlow{
-		flow: newFlow(),
+		prioritizer: defaultPriorityFunc,
+		flows:       map[int]*flow{0: f},
 	}
 }
 
 func NewRTPFlowWithID(id uint64) *RTPFlow {
+	f := newFlowWithID(id)
 	return &RTPFlow{
-		flow: newFlowWithID(id),
+		prioritizer: defaultPriorityFunc,
+		flows:       map[int]*flow{0: f},
 	}
 }
 
@@ -118,7 +138,17 @@ func (f *RTPFlow) RunLocalFeedback(ctx context.Context, ssrc uint32, m Metricer,
 }
 
 func (f *RTPFlow) Bind(t io.Writer) {
-	f.transport = t
+	f.flows[0].transport = t
+}
+
+func (f *RTPFlow) BindPriority(priority int, flowID uint64, transport io.Writer) {
+	flow := newFlowWithID(flowID)
+	flow.transport = transport
+	f.flows[priority] = flow
+}
+
+func (f *RTPFlow) SetPrioritizer(p Prioritizer) {
+	f.prioritizer = p
 }
 
 func (f *RTPFlow) Write(header *rtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
@@ -126,8 +156,13 @@ func (f *RTPFlow) Write(header *rtp.Header, payload []byte, _ interceptor.Attrib
 	if err != nil {
 		return 0, err
 	}
+	prio := f.prioritizer.Prioritize(header, payload)
+	flow, ok := f.flows[prio]
+	if !ok {
+		panic(fmt.Errorf("no flow with prio %v found", prio))
+	}
 	if f.localFeedback != nil {
-		return f.writeWithCallBack(
+		return flow.writeWithCallBack(
 			append(headerBuf, payload...),
 			f.ackCallback(
 				time.Now(),
@@ -137,7 +172,7 @@ func (f *RTPFlow) Write(header *rtp.Header, payload []byte, _ interceptor.Attrib
 			),
 		)
 	}
-	return f.write(append(headerBuf, payload...))
+	return flow.write(append(headerBuf, payload...))
 }
 
 func (f *RTPFlow) ackCallback(sent time.Time, ssrc uint32, size int, seqNr uint16) func(bool) {

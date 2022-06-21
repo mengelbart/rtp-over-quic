@@ -104,10 +104,12 @@ type Starter interface {
 func getSender(transport string, mf controller.MediaSourceFactory, options ...controller.Option[controller.BaseSender]) (Starter, error) {
 	switch transport {
 	case "quic", "quic-dgram":
-		return controller.NewQUICSender(mf, false, options...)
+		return controller.NewQUICSender(mf, controller.DGRAM, options...)
 	case "quic-stream":
 		options = append(options, controller.MTU[controller.BaseSender](65_000))
-		return controller.NewQUICSender(mf, true, options...)
+		return controller.NewQUICSender(mf, controller.STREAM, options...)
+	case "quic-prio":
+		return controller.NewQUICSender(mf, controller.PRIORITIZED, options...)
 	case "udp":
 		return controller.NewUDPSender(mf, options...)
 	case "tcp":
