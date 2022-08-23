@@ -6,7 +6,6 @@ import (
 	"github.com/mengelbart/syncodec"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtp"
-	"github.com/pion/rtp/codecs"
 )
 
 const (
@@ -29,11 +28,14 @@ func NewSyncodecSource(rtpWriter interceptor.RTPWriter, opts ...ConfigOption) (*
 	if err != nil {
 		return nil, err
 	}
+	payloader, err := payloaderForCodec(c.codec)
+	if err != nil {
+		return nil, err
+	}
 	packetizer := rtp.NewPacketizer(
-		uint16(c.mtu),
 		c.payloadType,
 		c.ssrc,
-		&codecs.VP8Payloader{},
+		payloader,
 		rtp.NewRandomSequencer(),
 		c.clockRate,
 	)
@@ -54,7 +56,7 @@ func NewSyncodecSource(rtpWriter interceptor.RTPWriter, opts ...ConfigOption) (*
 
 func (e *SyncodecSource) WriteFrame(frame syncodec.Frame) {
 	samples := uint32(frame.Duration.Seconds() * float64(e.clockRate))
-	pkts := e.packetizer.Packetize(frame.Content, samples)
+	pkts := e.packetizer.Packetize(e.mtu, frame.Content, samples)
 	for _, pkt := range pkts {
 		if _, err := e.rtpWriter.Write(&pkt.Header, pkt.Payload, nil); err != nil {
 			log.Printf("WARNING: failed to write RTP packet: %v", err)

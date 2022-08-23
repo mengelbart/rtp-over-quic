@@ -1,5 +1,12 @@
 package media
 
+import (
+	"fmt"
+
+	"github.com/pion/rtp"
+	"github.com/pion/rtp/codecs"
+)
+
 type ConfigOption func(*Config) error
 
 type Config struct {
@@ -67,5 +74,22 @@ func Codec(codec string) ConfigOption {
 	return func(c *Config) error {
 		c.codec = codec
 		return nil
+	}
+}
+
+func payloaderForCodec(codec string) (rtp.Payloader, error) {
+	switch codec {
+	case "h264":
+		return &codecs.H264Payloader{}, nil
+	case "vp8":
+		return &codecs.VP8Payloader{
+			EnablePictureID: true,
+		}, nil
+	case "vp9":
+		return &codecs.VP9Payloader{}, nil
+	case "av1":
+		return &codecs.AV1Payloader{}, nil
+	default:
+		return nil, fmt.Errorf("the requested codec %v does not have a payloader", codec)
 	}
 }

@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/lucas-clemente/quic-go v0.28.1
-	github.com/mengelbart/gst-go v0.0.0-20220728011443-f5573adc52cd
+	github.com/mengelbart/gst-go v0.0.0-20220824124234-80d4e9fbbda6
 	github.com/mengelbart/scream-go v0.4.0
 	github.com/mengelbart/syncodec v0.0.0-20220105132658-94ec57e63a65
 	github.com/pion/interceptor v0.1.12
@@ -38,3 +38,5 @@ require (
 )
 
 replace github.com/lucas-clemente/quic-go v0.28.1 => github.com/mengelbart/quic-go v0.7.1-0.20220823120832-603bb8701f28
+
+replace github.com/pion/rtp v1.7.13 => github.com/mengelbart/rtp v1.7.14-0.20220728010821-271390af6fab

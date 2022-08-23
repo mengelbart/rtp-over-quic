@@ -51,7 +51,7 @@ func startSender() error {
 	if transport == "quic-stream" {
 		mediaOptions = append(mediaOptions, media.MTU(1_000_000))
 	}
-	mediaFactory := GstreamerSourceFactory(source, mediaOptions...)
+	mediaFactory := GstreamerSourceFactory(source, transport != "quic-prio", mediaOptions...)
 	if source == "syncodec" {
 		mediaFactory = SyncodecSourceFactory(mediaOptions...)
 	}
@@ -124,9 +124,9 @@ func (f mediaSourceFactoryFunc) Create(w interceptor.RTPWriter) (controller.Medi
 	return f(w)
 }
 
-func GstreamerSourceFactory(src string, opts ...media.ConfigOption) controller.MediaSourceFactory {
+func GstreamerSourceFactory(src string, useGstPacketizer bool, opts ...media.ConfigOption) controller.MediaSourceFactory {
 	return mediaSourceFactoryFunc(func(w interceptor.RTPWriter) (controller.MediaSource, error) {
-		return media.NewGstreamerSource(w, src, opts...)
+		return media.NewGstreamerSource(w, src, useGstPacketizer, opts...)
 	})
 }
 

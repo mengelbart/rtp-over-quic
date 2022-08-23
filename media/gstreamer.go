@@ -4,20 +4,28 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"time"
 
 	"github.com/mengelbart/gst-go/gstreamer"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtp"
 )
 
-type GstreamerSource struct {
-	Config
-	src       string
-	pipeline  *gstreamer.Pipeline
-	rtpWriter interceptor.RTPWriter
+type mtuGetter interface {
+	getMTU(gstreamer.Buffer) uint
 }
 
-func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, opts ...ConfigOption) (*GstreamerSource, error) {
+type GstreamerSource struct {
+	Config
+	src              string
+	pipeline         *gstreamer.Pipeline
+	rtpWriter        interceptor.RTPWriter
+	useGstPacketizer bool
+	close            chan struct{}
+	mtuGetter        mtuGetter
+}
+
+func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, useGstPacketizer bool, opts ...ConfigOption) (*GstreamerSource, error) {
 	if len(src) == 0 {
 		return nil, fmt.Errorf("invalid source string: %v, use 'videotestsrc' or a valid filename instead", src)
 	}
@@ -56,7 +64,9 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, opts ...Con
 			gstreamer.Set("cpu-used", 4),
 			gstreamer.Set("deadline", 1),
 		))
-		builder = append(builder, gstreamer.NewElement(fmt.Sprintf("rtp%vpay", c.codec), payloaderSettings...))
+		if useGstPacketizer {
+			builder = append(builder, gstreamer.NewElement(fmt.Sprintf("rtp%vpay", c.codec), payloaderSettings...))
+		}
 	case "h264":
 		builder = append(builder, gstreamer.NewElement("x264enc",
 			gstreamer.Set("name", "encoder"),
@@ -64,58 +74,101 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, opts ...Con
 			gstreamer.Set("speed-preset", 4),
 			gstreamer.Set("tune", 4),
 		))
-		builder = append(builder, gstreamer.NewElement("rtph264pay", payloaderSettings...))
+		if useGstPacketizer {
+			builder = append(builder, gstreamer.NewElement("rtph264pay", payloaderSettings...))
+		}
 	case "h265":
 		builder = append(builder, gstreamer.NewElement("x265enc"))
-		builder = append(builder, gstreamer.NewElement("rtph265pay", payloaderSettings...))
+		if useGstPacketizer {
+			builder = append(builder, gstreamer.NewElement("rtph265pay", payloaderSettings...))
+		}
 	case "av1":
 		panic("rtpav1pay is not yet implemented in Gstreamer")
 		//builder = append(builder, gstreamer.NewElement("av1enc"))
+		//if useGstPacketizer {
 		//builder = append(builder, gstreamer.NewElement("rtpav1pay", payloaderSettings...))
+		//}
 	}
 
 	builder = append(builder, gstreamer.NewElement("appsink", gstreamer.Set("name", "appsink")))
 	pipelineStr := builder.Build()
 	log.Printf("src pipeline: %v", pipelineStr)
 
-	pipeline, err := gstreamer.NewPipeline(pipelineStr, func() {}, func(err error) {})
+	pipeline, err := gstreamer.NewPipeline(pipelineStr)
 	if err != nil {
 		return nil, err
 	}
 	s := &GstreamerSource{
-		Config:    *c,
-		src:       src,
-		pipeline:  pipeline,
-		rtpWriter: rtpWriter,
+		Config:           *c,
+		src:              src,
+		pipeline:         pipeline,
+		rtpWriter:        rtpWriter,
+		useGstPacketizer: useGstPacketizer,
+		close:            make(chan struct{}),
 	}
 	return s, nil
 }
 
 func (s *GstreamerSource) Play() error {
+	bufferCh := make(chan gstreamer.Buffer)
+	s.pipeline.SetBufferHandler(func(b gstreamer.Buffer) {
+		bufferCh <- b
+	})
+	s.pipeline.SetEOSHandler(func() {
+		close(bufferCh)
+	})
+	s.pipeline.SetErrorHandler(func(err error) {
+		panic(fmt.Errorf("ERROR: %w", err))
+		// TODO
+	})
 	go s.pipeline.Start()
 
-	buf := make([]byte, s.mtu)
-	for {
-		n, err := s.pipeline.Read(buf)
+	var packetizer rtp.Packetizer
+	if !s.useGstPacketizer {
+		payloader, err := payloaderForCodec(s.codec)
 		if err != nil {
-			if err == io.EOF || err == io.ErrClosedPipe {
+			return err
+		}
+		packetizer = rtp.NewPacketizer(s.payloadType, s.ssrc, payloader, rtp.NewFixedSequencer(0), 90_000)
+	}
+
+	for {
+		select {
+		case <-s.close:
+			return nil
+		case buffer, ok := <-bufferCh:
+			if !ok {
 				return nil
 			}
-			return err
-		}
-		var pkt rtp.Packet
-		err = pkt.Unmarshal(buf[:n])
-		if err != nil {
-			return err
-		}
-		_, err = s.rtpWriter.Write(&pkt.Header, pkt.Payload, nil)
-		if err != nil {
-			return err
+			if !s.useGstPacketizer {
+				samples := uint32((time.Duration(buffer.Duration).Seconds()) * float64(s.clockRate))
+
+				mtu := s.mtuGetter.getMTU(buffer)
+				// TODO: set mtu based on frame type instead of just taking s.mtu
+				pkts := packetizer.Packetize(mtu, buffer.Bytes, samples)
+				for _, pkt := range pkts {
+					_, err := s.rtpWriter.Write(&pkt.Header, pkt.Payload, nil)
+					if err != nil {
+						return err
+					}
+				}
+			} else {
+				var pkt rtp.Packet
+				err := pkt.Unmarshal(buffer.Bytes)
+				if err != nil {
+					return err
+				}
+				_, err = s.rtpWriter.Write(&pkt.Header, pkt.Payload, nil)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 }
 
 func (s *GstreamerSource) Stop() error {
+	close(s.close)
 	return s.pipeline.Close()
 }
 
@@ -192,7 +245,7 @@ func NewGstreamerSink(dst string, opts ...ConfigOption) (*GstreamerSink, error) 
 	pipelineStr := builder.Build()
 	log.Printf("sink pipeline: %v", pipelineStr)
 
-	pipeline, err := gstreamer.NewPipeline(pipelineStr, func() {}, func(err error) {})
+	pipeline, err := gstreamer.NewPipeline(pipelineStr)
 	if err != nil {
 		return nil, err
 	}
