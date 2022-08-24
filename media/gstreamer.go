@@ -187,7 +187,6 @@ func (s *GstreamerSource) SetTargetBitsPerSecond(bitrate uint) {
 type GstreamerSink struct {
 	Config
 	io.Writer
-	dst      string
 	pipeline *gstreamer.Pipeline
 }
 
@@ -239,8 +238,18 @@ func NewGstreamerSink(dst string, opts ...ConfigOption) (*GstreamerSink, error) 
 	builder = append(builder,
 		gstreamer.NewElement("decodebin"),
 		gstreamer.NewElement("videoconvert"),
-		gstreamer.NewElement("autovideosink"),
+		gstreamer.NewElement("clocksync"),
 	)
+	if dst == "autovideosink" {
+		builder = append(builder,
+			gstreamer.NewElement("autovideosink"),
+		)
+	} else {
+		builder = append(builder,
+			gstreamer.NewElement("y4menc"),
+			gstreamer.NewElement(fmt.Sprintf("filesink location=%v", dst)),
+		)
+	}
 
 	pipelineStr := builder.Build()
 	log.Printf("sink pipeline: %v", pipelineStr)
@@ -252,7 +261,6 @@ func NewGstreamerSink(dst string, opts ...ConfigOption) (*GstreamerSink, error) 
 	s := &GstreamerSink{
 		Config:   *c,
 		Writer:   pipeline,
-		dst:      dst,
 		pipeline: pipeline,
 	}
 	return s, nil
