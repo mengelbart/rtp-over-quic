@@ -69,7 +69,10 @@ func connectQUIC(
 		InsecureSkipVerify: true,
 		NextProtos:         []string{rtpOverQUICALPN},
 	}
-	tracers := []logging.Tracer{metricsTracer}
+	tracers := []logging.Tracer{}
+	if metricsTracer != nil {
+		tracers = append(tracers, metricsTracer)
+	}
 	if qlogWriter != nil {
 		tracers = append(tracers, qlogWriter)
 	}

@@ -75,9 +75,13 @@ func (s *QUICServer) handle(ctx context.Context, conn quic.Connection) error {
 	var rtpTransports []io.ReadWriter
 	switch s.mode {
 	case STREAM:
-		rtpTransports = append(rtpTransports, transport.NewStreamTransportWithConn(conn))
+		t := transport.NewStreamTransportWithConn(conn)
+		rtpTransports = append(rtpTransports, t)
+		rtcpTransport = t
 	case DGRAM:
-		rtpTransports = append(rtpTransports, transport.NewDgramTransportWithConn(conn))
+		t := transport.NewDgramTransportWithConn(conn)
+		rtpTransports = append(rtpTransports, t)
+		rtcpTransport = t
 	case PRIORITIZED:
 		st := transport.NewStreamTransportWithConn(conn)
 		dt := transport.NewDgramTransportWithConn(conn)
