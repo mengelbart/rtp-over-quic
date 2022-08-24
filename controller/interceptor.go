@@ -9,8 +9,8 @@ import (
 	"github.com/pion/interceptor/pkg/cc"
 	"github.com/pion/interceptor/pkg/gcc"
 	"github.com/pion/interceptor/pkg/packetdump"
+	"github.com/pion/interceptor/pkg/rfc8888"
 	"github.com/pion/interceptor/pkg/twcc"
-	"github.com/pion/interceptor/rfc8888/pkg/rfc8888"
 )
 
 const feedbackInterval = 10 * time.Millisecond
