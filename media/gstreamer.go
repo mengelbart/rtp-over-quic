@@ -15,6 +15,9 @@ type mtuGetter interface {
 	getMTU(gstreamer.Buffer) uint
 }
 
+// TODO: If usefule, make this configurable?
+const teeLiveVideo = false // if set, displays source video in autovideosink
+
 type GstreamerSource struct {
 	Config
 	src              string
@@ -46,7 +49,18 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, useGstPacke
 			gstreamer.NewElement("decodebin"),
 		)
 	}
-	builder = append(builder, gstreamer.NewElement("clocksync"))
+	builder = append(builder,
+		gstreamer.NewElement("clocksync"),
+	)
+
+	if teeLiveVideo {
+		builder = append(builder,
+			gstreamer.NewElement("tee", gstreamer.Set("name", "t")),
+			gstreamer.NewElement("queue"),
+			gstreamer.NewElement("autovideosink t."),
+			gstreamer.NewElement("queue"),
+		)
+	}
 
 	payloaderSettings := []gstreamer.ElementOption{
 		gstreamer.Set("name", "payloader"),
@@ -90,7 +104,9 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, useGstPacke
 		//}
 	}
 
-	builder = append(builder, gstreamer.NewElement("appsink", gstreamer.Set("name", "appsink")))
+	builder = append(builder,
+		gstreamer.NewElement("appsink", gstreamer.Set("name", "appsink")),
+	)
 	pipelineStr := builder.Build()
 	log.Printf("src pipeline: %v", pipelineStr)
 
@@ -239,7 +255,18 @@ func NewGstreamerSink(dst string, opts ...ConfigOption) (*GstreamerSink, error) 
 		gstreamer.NewElement("decodebin"),
 		gstreamer.NewElement("videoconvert"),
 		gstreamer.NewElement("clocksync"),
+		gstreamer.NewElement("videorate"),
 	)
+
+	if teeLiveVideo {
+		builder = append(builder,
+			gstreamer.NewElement("tee", gstreamer.Set("name", "t")),
+			gstreamer.NewElement("queue"),
+			gstreamer.NewElement("autovideosink t."),
+			gstreamer.NewElement("queue"),
+		)
+	}
+
 	if dst == "autovideosink" {
 		builder = append(builder,
 			gstreamer.NewElement("autovideosink"),
