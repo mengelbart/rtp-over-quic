@@ -116,6 +116,10 @@ func (s *QUICServer) handle(ctx context.Context, conn quic.Connection) error {
 	})
 	wg.Go(sink.Play)
 
+	wg.Go(func() error {
+		return s.receiveStreamLoop(ctx, conn)
+	})
+
 	select {
 	case <-conn.Context().Done():
 	case <-ctx.Done():
@@ -124,4 +128,22 @@ func (s *QUICServer) handle(ctx context.Context, conn quic.Connection) error {
 		log.Printf("error on closing connection: %v", err)
 	}
 	return wg.Wait()
+}
+
+func (s *QUICServer) receiveStreamLoop(ctx context.Context, session quic.Connection) error {
+	log.Println("Accept stream")
+	defer log.Println("Exiting receive stream loop")
+	stream, err := session.AcceptUniStream(ctx)
+	if err != nil {
+		return err
+	}
+	log.Println("got stream")
+	buf := make([]byte, 1200)
+	for {
+		_, err := stream.Read(buf)
+		if err != nil {
+			return err
+		}
+		//log.Printf("received %v stream bytes\n", n)
+	}
 }
