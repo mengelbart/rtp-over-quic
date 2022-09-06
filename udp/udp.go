@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -38,7 +39,11 @@ func connectUDP(addr string) (*net.UDPConn, error) {
 		return nil, err
 	}
 	if err = SetReceiveBuffer(conn); err != nil {
-		return nil, err
+		if !strings.Contains(err.Error(), "use of closed network connection") {
+			log.Printf("%s. See https://github.com/lucas-clemente/quic-go/wiki/UDP-Receive-Buffer-Size for details.", err)
+		} else {
+			return nil, err
+		}
 	}
 	return conn, nil
 }
