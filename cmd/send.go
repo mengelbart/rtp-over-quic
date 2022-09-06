@@ -13,11 +13,9 @@ import (
 	"github.com/mengelbart/rtp-over-quic/media"
 	"github.com/mengelbart/rtp-over-quic/quic"
 	"github.com/mengelbart/rtp-over-quic/rtp"
-	"github.com/mengelbart/rtp-over-quic/scream"
 	"github.com/mengelbart/rtp-over-quic/tcp"
 	"github.com/mengelbart/rtp-over-quic/udp"
 	"github.com/pion/interceptor"
-	rtpcc "github.com/pion/interceptor/pkg/cc"
 	"github.com/spf13/cobra"
 )
 
@@ -45,33 +43,65 @@ func init() {
 var sendCmd = &cobra.Command{
 	Use: "send",
 	Run: func(cmd *cobra.Command, _ []string) {
-		if err := start(cmd.Context()); err != nil {
+		sc := senderController{}
+		if err := sc.start(cmd.Context()); err != nil {
 			log.Fatal(err)
 		}
 	},
 }
 
-func setupInterceptor() (interceptor.Interceptor, error) {
+type MediaSource interface {
+	Play() error
+	Stop() error
+	SetTargetBitsPerSecond(uint)
+}
+
+type BandwidthEstimator interface {
+	SetMedia(rtp.Media)
+}
+
+type senderController struct {
+	ms  MediaSource
+	bwe BandwidthEstimator
+}
+
+func (c *senderController) setupInterceptor(ctx context.Context) (interceptor.Interceptor, error) {
 	rtpOptions := []rtp.Option{
 		rtp.RegisterSenderPacketLog(rtpDumpFile, rtcpDumpFile),
 	}
 
 	if rtpCC == controller.SCReAM.String() {
-		rtpOptions = append(rtpOptions, rtp.RegisterSCReAM(func(id string, estimator scream.BandwidthEstimator) {
-			// TODO
-		}, int(initialTargetBitrate)))
+		bwe, err := rtp.NewBandwidthEstimator(ccDump)
+		if err != nil {
+			return nil, err
+		}
+		c.bwe = bwe
+		go func() {
+			if err := bwe.RunSCReAM(ctx); err != nil {
+				log.Printf("bwe.RunSCReAM returned error: %v", err)
+			}
+		}()
+		rtpOptions = append(rtpOptions, rtp.RegisterSCReAM(bwe.OnNewSCReAMEstimator, int(initialTargetBitrate)))
 	}
 	if rtpCC == controller.GCC.String() {
+		bwe, err := rtp.NewBandwidthEstimator(ccDump)
+		if err != nil {
+			return nil, err
+		}
+		c.bwe = bwe
+		go func() {
+			if err := bwe.RunGCC(ctx); err != nil {
+				log.Printf("bwe.RunSCReAM returned error: %v", err)
+			}
+		}()
 		rtpOptions = append(rtpOptions, rtp.RegisterTWCCHeaderExtension())
-		rtpOptions = append(rtpOptions, rtp.RegisterGCC(func(id string, estimator rtpcc.BandwidthEstimator) {
-			// TODO
-		}))
+		rtpOptions = append(rtpOptions, rtp.RegisterGCC(bwe.OnNewGCCEstimator))
 	}
 	return rtp.New(rtpOptions...)
 }
 
-func start(ctx context.Context) error {
-	in, err := setupInterceptor()
+func (c *senderController) start(ctx context.Context) error {
+	in, err := c.setupInterceptor(ctx)
 	if err != nil {
 		return err
 	}
@@ -83,7 +113,7 @@ func start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return startMedia(sender)
+	return c.startMedia(sender)
 }
 
 func transportFactory(transport string) (func(context.Context, interceptor.Interceptor) (interceptor.RTPWriter, error), error) {
@@ -143,16 +173,26 @@ func startTCPSender(ctx context.Context, in interceptor.Interceptor) (intercepto
 	return sender, nil
 }
 
-func startMedia(writer interceptor.RTPWriter) error {
+func (c *senderController) startMedia(writer interceptor.RTPWriter) error {
 	mediaOptions := []media.ConfigOption{
 		media.Codec(codec),
 		media.InitialTargetBitrate(initialTargetBitrate),
 	}
-	source, err := media.NewGstreamerSource(writer, source, transport != "quic-prio", mediaOptions...)
+	var ms MediaSource
+	var err error
+	switch source {
+	case "syncodec":
+		ms, err = media.NewSyncodecSource(writer, mediaOptions...)
+	default:
+		ms, err = media.NewGstreamerSource(writer, source, transport != "quic-prio", mediaOptions...)
+	}
 	if err != nil {
 		return err
 	}
-	return source.Play()
+	if c.bwe != nil {
+		c.bwe.SetMedia(ms)
+	}
+	return ms.Play()
 }
 
 func startSender() error {

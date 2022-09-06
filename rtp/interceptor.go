@@ -20,14 +20,14 @@ type Option func(*interceptor.Registry) error
 
 func New(options ...Option) (interceptor.Interceptor, error) {
 	registry := interceptor.Registry{}
-	i, err := registry.Build("")
-	if err != nil {
-		return nil, err
-	}
 	for _, option := range options {
 		if err := option(&registry); err != nil {
 			return nil, err
 		}
+	}
+	i, err := registry.Build("")
+	if err != nil {
+		return nil, err
 	}
 	return i, nil
 }

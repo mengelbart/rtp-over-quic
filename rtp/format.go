@@ -39,19 +39,23 @@ func (f *rtpFormatter) rtpFormat(pkt *rtp.Packet, _ interceptor.Attributes) stri
 
 func rtcpFormat(pkts []rtcp.Packet, _ interceptor.Attributes) string {
 	now := time.Now().UnixMilli()
+	types := []string{}
 	size := 0
 	for _, pkt := range pkts {
 		switch feedback := pkt.(type) {
 		case *rtcp.CCFeedbackReport:
 			size += int(feedback.Len())
+			types = append(types, "ccfb")
 			//return fmt.Sprintf("len=%v; %v\n", feedback.Len(), feedback)
 		case *rtcp.TransportLayerCC:
 			size += int(feedback.Len())
+			types = append(types, "twcc")
 			//return fmt.Sprintf("len=%v; %v\n", feedback.Len(), feedback)
 		case *rtcp.RawPacket:
 			size += int(len(*feedback))
+			types = append(types, "raw")
 			//return fmt.Sprintf("RAW: %v\n%x\n", feedback.Header(), feedback)
 		}
 	}
-	return fmt.Sprintf("%v, %v\n", now, size)
+	return fmt.Sprintf("%v, %v, %v\n", now, size, types)
 }

@@ -30,9 +30,11 @@ type Sender struct {
 
 func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error) {
 	s := &Sender{
-		SenderConfig: &SenderConfig{},
-		conn:         nil,
-		interceptor:  i,
+		SenderConfig: &SenderConfig{
+			remoteAddr: "",
+		},
+		conn:        nil,
+		interceptor: i,
 	}
 	for _, opt := range opts {
 		if err := opt(s.SenderConfig); err != nil {

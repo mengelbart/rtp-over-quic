@@ -220,7 +220,7 @@ func (s *SenderInterceptor) BindLocalStream(info *interceptor.StreamInfo, writer
 
 	go s.loopPacingTimer(writer, info.SSRC)
 
-	return interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
+	return interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
 		t := s.getTimeNTP(time.Now())
 
 		buf := make([]byte, len(payload))

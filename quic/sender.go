@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io"
+	"log"
 	"math/big"
 	"time"
 
@@ -22,6 +23,11 @@ import (
 )
 
 const rtpOverQUICALPN = "rtp-mux-quic"
+
+type rtcpFeedback struct {
+	buf        []byte
+	attributes interceptor.Attributes
+}
 
 type SenderOption func(*SenderConfig) error
 
@@ -66,6 +72,7 @@ type Sender struct {
 	conn          quic.Connection
 	metricsTracer quiclogging.Tracer
 	interceptor   interceptor.Interceptor
+	rtcpChan      chan rtcpFeedback
 }
 
 func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error) {
@@ -74,6 +81,7 @@ func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error)
 		conn:          nil,
 		metricsTracer: nil,
 		interceptor:   i,
+		rtcpChan:      make(chan rtcpFeedback),
 	}
 	for _, opt := range opts {
 		if err := opt(s.SenderConfig); err != nil {
@@ -116,7 +124,54 @@ func (s *Sender) Connect(ctx context.Context) error {
 		return err
 	}
 	s.conn = conn
+
+	rtcpReader := s.interceptor.BindRTCPReader(interceptor.RTCPReaderFunc(
+		func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
+			return len(b), a, nil
+		}),
+	)
+	go s.readRTCP(ctx, rtcpReader)
+	go s.readFromNetwork(ctx)
+
 	return nil
+}
+
+func (s *Sender) readFromNetwork(ctx context.Context) {
+	for {
+		buf, err := s.conn.ReceiveMessage()
+		if err != nil {
+			if e, ok := err.(*quic.ApplicationError); ok && e.ErrorCode == 0 {
+				log.Printf("QUIC received application error, exiting reader routine: %v", err)
+				return
+			}
+			log.Printf("failed to receive QUIC datagram: %v", err)
+			continue
+		}
+		// TODO: If multiple RTCP flows are required, demultiplex on id here
+		id, err := quicvarint.Read(bytes.NewReader(buf))
+		if err != nil {
+			log.Printf("failed to read flow ID: %v, dropping datagram", err)
+			continue
+		}
+		s.rtcpChan <- rtcpFeedback{
+			buf:        buf[quicvarint.Len(id):],
+			attributes: nil,
+		}
+	}
+}
+
+func (s *Sender) readRTCP(ctx context.Context, reader interceptor.RTCPReader) {
+	for {
+		select {
+		case report := <-s.rtcpChan:
+			_, _, err := reader.Read(report.buf, report.attributes)
+			if err != nil {
+				log.Printf("RTCP reader returned error: %v", err)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (s *Sender) writeDgram(buf []byte) (int, error) {
@@ -138,7 +193,17 @@ func (s *Sender) NewMediaStream() interceptor.RTPWriter {
 		varIntID: idBuffer.Bytes(),
 		writer:   nil,
 	}
-	writer := s.interceptor.BindLocalStream(&interceptor.StreamInfo{}, ms)
+	writer := s.interceptor.BindLocalStream(&interceptor.StreamInfo{}, interceptor.RTPWriterFunc(
+		func(header *rtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
+			headerBuf, err := header.Marshal()
+			if err != nil {
+				return 0, err
+			}
+			pl := append(ms.varIntID, headerBuf...)
+			pl = append(pl, payload...)
+			return s.writeDgram(pl)
+		},
+	))
 	ms.writer = writer
 	return ms
 }
@@ -151,13 +216,7 @@ type MediaStream struct {
 }
 
 func (s *MediaStream) Write(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
-	headerBuf, err := header.Marshal()
-	if err != nil {
-		return 0, err
-	}
-	pl := append(s.varIntID, headerBuf...)
-	pl = append(pl, payload...)
-	return s.sender.writeDgram(pl)
+	return s.writer.Write(header, payload, attributes)
 }
 
 // Setup a bare-bones TLS config for the server
