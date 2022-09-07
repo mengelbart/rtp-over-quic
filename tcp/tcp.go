@@ -52,3 +52,12 @@ func connectTCP(addr string, cc cc.Algorithm) (*net.TCPConn, error) {
 	//}()
 	return conn.(*net.TCPConn), nil
 }
+
+func listenTCP(addr string) (*net.TCPListener, error) {
+	// TODO: Setup CC alogithm?
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return net.ListenTCP("tcp", tcpAddr)
+}

@@ -6,12 +6,10 @@ import (
 	"io"
 	"log"
 	"sync"
-	"time"
 
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/quicvarint"
 	"github.com/mengelbart/rtp-over-quic/cc"
-	"github.com/mengelbart/rtp-over-quic/logging"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
 )
@@ -76,7 +74,7 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 }
 
 func (s *Server) Start(ctx context.Context) error {
-	listener, err := s.listen(s.localAddr, s.cc, s.qlogDirectoryName, s.sslKeyLogFileName)
+	listener, err := listen(s.localAddr, s.cc, s.qlogDirectoryName, s.sslKeyLogFileName)
 	if err != nil {
 		return err
 	}
@@ -221,30 +219,4 @@ func (h *Handler) WriteRTCP(pkts []rtcp.Packet, attributes interceptor.Attribute
 	quicvarint.Write(idWriter, id)
 	msg := append(idBuf.Bytes(), buf...)
 	return len(buf), h.conn.SendMessage(msg, nil, nil)
-}
-
-func (s *Server) listen(
-	addr string,
-	ccAlgo cc.Algorithm,
-	qlogDirectoryName string,
-	sslKeyLogFileName string,
-) (quic.Listener, error) {
-	qlogWriter, err := logging.GetQLOGTracer(qlogDirectoryName)
-	if err != nil {
-		return nil, err
-	}
-	keyLogger, err := logging.GetKeyLogger(sslKeyLogFileName)
-	if err != nil {
-		return nil, err
-	}
-	quicConf := &quic.Config{
-		EnableDatagrams:       true,
-		HandshakeIdleTimeout:  15 * time.Second,
-		Tracer:                qlogWriter,
-		DisableCC:             ccAlgo != cc.Reno,
-		MaxIncomingStreams:    1 << 60,
-		MaxIncomingUniStreams: 1 << 60,
-	}
-	tlsConf := generateTLSConfig(keyLogger)
-	return quic.ListenAddr(addr, tlsConf, quicConf)
 }
