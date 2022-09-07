@@ -12,6 +12,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type Starter interface {
+	Start(ctx context.Context) error
+}
+
 var (
 	sink         string
 	rtcpFeedback string
@@ -83,11 +87,11 @@ func startReceiver() error {
 		mediaFactory = SyncodecSinkFactory()
 	}
 	options := []controller.Option[controller.BaseServer]{
-		controller.SetAddr[controller.BaseServer](addr),
-		controller.SetRTPLogFileName[controller.BaseServer](rtpDumpFile),
-		controller.SetRTCPLogFileName[controller.BaseServer](rtcpDumpFile),
-		controller.SetQLOGDirName[controller.BaseServer](qlogDir),
-		controller.SetSSLKeyLogFileName[controller.BaseServer](keyLogFile),
+		controller.SetAddr(addr),
+		controller.SetRTPLogFileName(rtpDumpFile),
+		controller.SetRTCPLogFileName(rtcpDumpFile),
+		controller.SetQLOGDirName(qlogDir),
+		controller.SetSSLKeyLogFileName(keyLogFile),
 	}
 	switch getRTCP(rtcpFeedback) {
 	case RTCP_RFC8888:
@@ -126,7 +130,7 @@ func getServer(transport string, mf controller.MediaSinkFactory, options ...cont
 	case "quic", "quic-dgram":
 		return controller.NewQUICServer(mf, controller.DGRAM, options...)
 	case "quic-stream":
-		options = append(options, controller.MTU[controller.BaseServer](1_000_000))
+		options = append(options, controller.MTU(1_000_000))
 		return controller.NewQUICServer(mf, controller.STREAM, options...)
 	case "quic-prio":
 		return controller.NewQUICServer(mf, controller.PRIORITIZED, options...)

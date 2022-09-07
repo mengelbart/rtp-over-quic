@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -46,50 +45,6 @@ func listenQUIC(
 	}
 	tlsConf := generateTLSConfig(keyLogger)
 	return quic.ListenAddr(addr, tlsConf, quicConf)
-}
-
-func connectQUIC(
-	ctx context.Context,
-	addr string,
-	cc CongestionControlAlgorithm,
-	metricsTracer logging.Tracer,
-	qlogDirectoryName string,
-	sslKeyLogFileName string,
-) (quic.Connection, error) {
-	qlogWriter, err := getQLOGTracer(qlogDirectoryName)
-	if err != nil {
-		return nil, err
-	}
-	keyLogger, err := getKeyLogger(sslKeyLogFileName)
-	if err != nil {
-		return nil, err
-	}
-	tlsConf := &tls.Config{
-		KeyLogWriter:       keyLogger,
-		InsecureSkipVerify: true,
-		NextProtos:         []string{rtpOverQUICALPN},
-	}
-	tracers := []logging.Tracer{}
-	if metricsTracer != nil {
-		tracers = append(tracers, metricsTracer)
-	}
-	if qlogWriter != nil {
-		tracers = append(tracers, qlogWriter)
-	}
-	tracer := logging.NewMultiplexedTracer(tracers...)
-	quicConf := &quic.Config{
-		EnableDatagrams:       true,
-		HandshakeIdleTimeout:  15 * time.Second,
-		Tracer:                tracer,
-		DisableCC:             cc != Reno,
-		MaxIncomingStreams:    1 << 60,
-		MaxIncomingUniStreams: 1 << 60,
-	}
-	session, err := quic.DialAddrContext(ctx, addr, tlsConf, quicConf)
-	if err != nil {
-		return nil, err
-	}
-	return session, nil
 }
 
 func getQLOGTracer(path string) (logging.Tracer, error) {

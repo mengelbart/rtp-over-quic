@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/mengelbart/rtp-over-quic/cc"
@@ -63,7 +60,6 @@ type BandwidthEstimator interface {
 }
 
 type senderController struct {
-	ms  MediaSource
 	bwe BandwidthEstimator
 }
 
@@ -218,97 +214,4 @@ func (c *senderController) startMedia(writer interceptor.RTPWriter) error {
 		c.bwe.SetMedia(ms)
 	}
 	return ms.Play()
-}
-
-func startSender() error {
-	mediaOptions := []media.ConfigOption{
-		media.Codec(codec),
-		media.InitialTargetBitrate(initialTargetBitrate),
-	}
-	if transport == "quic-stream" {
-		mediaOptions = append(mediaOptions, media.MTU(1_000_000))
-	}
-	mediaFactory := GstreamerSourceFactory(source, transport != "quic-prio", mediaOptions...)
-	if source == "syncodec" {
-		mediaFactory = SyncodecSourceFactory(mediaOptions...)
-	}
-	options := []controller.Option[controller.BaseSender]{
-		controller.SetAddr[controller.BaseSender](addr),
-		controller.SetRTPLogFileName[controller.BaseSender](rtpDumpFile),
-		controller.SetRTCPLogFileName[controller.BaseSender](rtcpDumpFile),
-		controller.SetCCLogFileName(ccDump),
-		controller.SetQLOGDirName[controller.BaseSender](qlogDir),
-		controller.SetSSLKeyLogFileName[controller.BaseSender](keyLogFile),
-		controller.SetQUICCongestionControlAlgorithm[controller.BaseSender](controller.CongestionControlAlgorithmFromString(quicCC)),
-		controller.SetTCPCongestionControlAlgorithm[controller.BaseSender](controller.CongestionControlAlgorithmFromString(tcpCongAlg)),
-		controller.SetRTPCongestionControlAlgorithm(controller.CongestionControlAlgorithmFromString(rtpCC)),
-		controller.InitialRate(int(initialTargetBitrate)),
-	}
-	if sendStream {
-		options = append(options, controller.EnableStream[controller.BaseSender]())
-	}
-	if localRFC8888 {
-		options = append(options, controller.EnableLocalRFC8888())
-	}
-
-	var s Starter
-	s, err := getSender(transport, mediaFactory, options...)
-	if err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	defer func() {
-		signal.Stop(sigs)
-		cancel()
-	}()
-	go func() {
-		select {
-		case <-sigs:
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
-	return s.Start(ctx)
-}
-
-type Starter interface {
-	Start(ctx context.Context) error
-}
-
-func getSender(transport string, mf controller.MediaSourceFactory, options ...controller.Option[controller.BaseSender]) (Starter, error) {
-	switch transport {
-	case "quic", "quic-dgram":
-		return controller.NewQUICSender(mf, controller.DGRAM, options...)
-	case "quic-stream":
-		options = append(options, controller.MTU[controller.BaseSender](65_000))
-		return controller.NewQUICSender(mf, controller.STREAM, options...)
-	case "quic-prio":
-		return controller.NewQUICSender(mf, controller.PRIORITIZED, options...)
-	case "udp":
-		return controller.NewUDPSender(mf, options...)
-	case "tcp":
-		return controller.NewTCPSender(mf, options...)
-	}
-	return nil, errInvalidTransport
-}
-
-type mediaSourceFactoryFunc func(interceptor.RTPWriter) (controller.MediaSource, error)
-
-func (f mediaSourceFactoryFunc) Create(w interceptor.RTPWriter) (controller.MediaSource, error) {
-	return f(w)
-}
-
-func GstreamerSourceFactory(src string, useGstPacketizer bool, opts ...media.ConfigOption) controller.MediaSourceFactory {
-	return mediaSourceFactoryFunc(func(w interceptor.RTPWriter) (controller.MediaSource, error) {
-		return media.NewGstreamerSource(w, src, useGstPacketizer, opts...)
-	})
-}
-
-func SyncodecSourceFactory(opts ...media.ConfigOption) controller.MediaSourceFactory {
-	return mediaSourceFactoryFunc(func(w interceptor.RTPWriter) (controller.MediaSource, error) {
-		return media.NewSyncodecSource(w, opts...)
-	})
 }

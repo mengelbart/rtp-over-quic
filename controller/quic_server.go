@@ -15,6 +15,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type TransportMode int
+
+const (
+	DGRAM TransportMode = iota
+	STREAM
+	PRIORITIZED
+)
+
 type QUICServer struct {
 	BaseServer
 	mode TransportMode

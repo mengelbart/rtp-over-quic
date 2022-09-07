@@ -3,7 +3,6 @@ package controller
 import (
 	"errors"
 
-	"github.com/mengelbart/rtp-over-quic/transport"
 	"github.com/pion/interceptor"
 )
 
@@ -26,18 +25,6 @@ type commonBaseConfig struct {
 	rtcpLogFileName string
 }
 
-func (c *commonBaseConfig) registerSenderPacketLog(registry *interceptor.Registry) error {
-	rtpDumpFile, err := getLogFile(c.rtpLogFileName)
-	if err != nil {
-		return err
-	}
-	rtcpDumpFile, err := getLogFile(c.rtcpLogFileName)
-	if err != nil {
-		return err
-	}
-	return registerRTPSenderDumper(registry, rtpDumpFile, rtcpDumpFile)
-}
-
 func (c *commonBaseConfig) registerReceiverPacketLog(registry *interceptor.Registry) error {
 	rtpDumpFile, err := getLogFile(c.rtpLogFileName)
 	if err != nil {
@@ -50,7 +37,7 @@ func (c *commonBaseConfig) registerReceiverPacketLog(registry *interceptor.Regis
 	return registerRTPReceiverDumper(registry, rtpDumpFile, rtcpDumpFile)
 }
 
-type Option[T BaseSender | BaseServer] func(*T) error
+type Option[T BaseServer] func(*T) error
 
 // Generic options look a bit ugly due to this note from the go1.18 release
 // notes:
@@ -63,23 +50,9 @@ type Option[T BaseSender | BaseServer] func(*T) error
 // If this constrained will be removed at some point, we can clean this up
 // again.
 
-func InitialRate[T BaseSender](rate int) Option[T] {
+func MTU[T BaseServer](mtu uint) Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {
-		case *BaseSender:
-			x.initialTargetRate = rate
-		default:
-			return errInvalidOption
-		}
-		return nil
-	}
-}
-
-func MTU[T BaseSender | BaseServer](mtu uint) Option[T] {
-	return func(s *T) error {
-		switch x := any(s).(type) {
-		case *BaseSender:
-			x.mtu = mtu
 		case *BaseServer:
 			x.mtu = mtu
 		default:
@@ -89,23 +62,9 @@ func MTU[T BaseSender | BaseServer](mtu uint) Option[T] {
 	}
 }
 
-func EnableFlowID[T BaseSender](id uint64) Option[T] {
+func SetAddr[T BaseServer](addr string) Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {
-		case *BaseSender:
-			x.flow = transport.NewRTPFlowWithID(id)
-		default:
-			return errInvalidOption
-		}
-		return nil
-	}
-}
-
-func SetAddr[T BaseSender | BaseServer](addr string) Option[T] {
-	return func(s *T) error {
-		switch x := any(s).(type) {
-		case *BaseSender:
-			x.addr = addr
 		case *BaseServer:
 			x.addr = addr
 		default:
@@ -115,11 +74,9 @@ func SetAddr[T BaseSender | BaseServer](addr string) Option[T] {
 	}
 }
 
-func SetTCPCongestionControlAlgorithm[T BaseSender | BaseServer](a CongestionControlAlgorithm) Option[T] {
+func SetTCPCongestionControlAlgorithm[T BaseServer](a CongestionControlAlgorithm) Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {
-		case *BaseSender:
-			x.tcpCC = a
 		case *BaseServer:
 			x.tcpCC = a
 		default:
@@ -129,11 +86,9 @@ func SetTCPCongestionControlAlgorithm[T BaseSender | BaseServer](a CongestionCon
 	}
 }
 
-func SetQUICCongestionControlAlgorithm[T BaseSender | BaseServer](a CongestionControlAlgorithm) Option[T] {
+func SetQUICCongestionControlAlgorithm[T BaseServer](a CongestionControlAlgorithm) Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {
-		case *BaseSender:
-			x.quicCC = a
 		case *BaseServer:
 			x.quicCC = a
 		default:
@@ -143,11 +98,9 @@ func SetQUICCongestionControlAlgorithm[T BaseSender | BaseServer](a CongestionCo
 	}
 }
 
-func SetRTCPLogFileName[T BaseSender | BaseServer](name string) Option[T] {
+func SetRTCPLogFileName[T BaseServer](name string) Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {
-		case *BaseSender:
-			x.rtcpLogFileName = name
 		case *BaseServer:
 			x.rtcpLogFileName = name
 		default:
@@ -157,11 +110,9 @@ func SetRTCPLogFileName[T BaseSender | BaseServer](name string) Option[T] {
 	}
 }
 
-func SetRTPLogFileName[T BaseSender | BaseServer](name string) Option[T] {
+func SetRTPLogFileName[T BaseServer](name string) Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {
-		case *BaseSender:
-			x.rtpLogFileName = name
 		case *BaseServer:
 			x.rtpLogFileName = name
 		default:
@@ -171,11 +122,9 @@ func SetRTPLogFileName[T BaseSender | BaseServer](name string) Option[T] {
 	}
 }
 
-func EnableStream[T BaseSender | BaseServer]() Option[T] {
+func EnableStream[T BaseServer]() Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {
-		case *BaseSender:
-			x.stream = true
 		case *BaseServer:
 			x.stream = true
 		default:
@@ -185,11 +134,9 @@ func EnableStream[T BaseSender | BaseServer]() Option[T] {
 	}
 }
 
-func DisableStream[T BaseSender | BaseServer]() Option[T] {
+func DisableStream[T BaseServer]() Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {
-		case *BaseSender:
-			x.stream = false
 		case *BaseServer:
 			x.stream = false
 		default:
@@ -199,11 +146,9 @@ func DisableStream[T BaseSender | BaseServer]() Option[T] {
 	}
 }
 
-func SetSSLKeyLogFileName[T BaseSender | BaseServer](name string) Option[T] {
+func SetSSLKeyLogFileName[T BaseServer](name string) Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {
-		case *BaseSender:
-			x.sslKeyLogFileName = name
 		case *BaseServer:
 			x.sslKeyLogFileName = name
 		default:
@@ -213,11 +158,9 @@ func SetSSLKeyLogFileName[T BaseSender | BaseServer](name string) Option[T] {
 	}
 }
 
-func SetQLOGDirName[T BaseSender | BaseServer](name string) Option[T] {
+func SetQLOGDirName[T BaseServer](name string) Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {
-		case *BaseSender:
-			x.qlogDirName = name
 		case *BaseServer:
 			x.qlogDirName = name
 		default:
@@ -227,60 +170,11 @@ func SetQLOGDirName[T BaseSender | BaseServer](name string) Option[T] {
 	}
 }
 
-func SetStream[T BaseSender | BaseServer](b bool) Option[T] {
+func SetStream[T BaseServer](b bool) Option[T] {
 	return func(s *T) error {
 		switch x := any(s).(type) {
-		case *BaseSender:
-			x.stream = b
 		case *BaseServer:
 			x.stream = b
-		default:
-			return errInvalidOption
-		}
-		return nil
-	}
-}
-
-func SetCCLogFileName[T BaseSender](name string) Option[T] {
-	return func(s *T) error {
-		switch x := any(s).(type) {
-		case *BaseSender:
-			x.ccLogFileName = name
-		default:
-			return errInvalidOption
-		}
-		return nil
-	}
-}
-func EnableLocalRFC8888[T BaseSender]() Option[T] {
-	return func(s *T) error {
-		switch x := any(s).(type) {
-		case *BaseSender:
-			x.localRFC8888 = true
-		default:
-			return errInvalidOption
-		}
-		return nil
-	}
-}
-
-func DisableLocalRFC8888[T BaseSender]() Option[T] {
-	return func(s *T) error {
-		switch x := any(s).(type) {
-		case *BaseSender:
-			x.localRFC8888 = false
-		default:
-			return errInvalidOption
-		}
-		return nil
-	}
-}
-
-func SetRTPCongestionControlAlgorithm[T BaseSender](algorithm CongestionControlAlgorithm) Option[T] {
-	return func(s *T) error {
-		switch x := any(s).(type) {
-		case *BaseSender:
-			x.rtpCC = algorithm
 		default:
 			return errInvalidOption
 		}

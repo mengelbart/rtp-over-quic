@@ -12,6 +12,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const transportCCURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+
 // demultiplexer inspects a packet buffer and returns the flow id to which the
 // packet belongs. The second return value is the remaining part of the packet
 // after removing the flow id from the packet. If there is no flow id stored in

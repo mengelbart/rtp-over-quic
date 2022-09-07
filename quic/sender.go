@@ -181,10 +181,6 @@ func (s *Sender) writeDgram(buf []byte) (int, error) {
 	return len(buf), s.conn.SendMessage(buf, nil, nil)
 }
 
-func (s *Sender) writeWithAckLossCallback(buf []byte, cb func(bool)) (int, error) {
-	return len(buf), s.conn.SendMessage(buf, nil, cb)
-}
-
 func (s *Sender) NewMediaStream() interceptor.RTPWriter {
 	id := uint64(0)
 	var idBuffer bytes.Buffer

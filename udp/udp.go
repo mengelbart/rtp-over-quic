@@ -13,22 +13,6 @@ import (
 
 const desiredReceiveBufferSize = (1 << 20) * 2 // 2 MB
 
-func listenUDP(addr string) (*net.UDPConn, error) {
-	a, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := net.ListenUDP("udp", a)
-	if err != nil {
-		return nil, err
-	}
-	if err = SetReceiveBuffer(conn); err != nil {
-		return nil, err
-	}
-	return conn, nil
-}
-
 func connectUDP(addr string) (*net.UDPConn, error) {
 	a, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {

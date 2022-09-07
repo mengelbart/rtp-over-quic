@@ -33,25 +33,6 @@ func listenUDP(addr string) (*net.UDPConn, error) {
 	return conn, nil
 }
 
-func connectUDP(addr string) (*net.UDPConn, error) {
-	a, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return nil, err
-	}
-	conn, err := net.DialUDP("udp", nil, a)
-	if err != nil {
-		return nil, err
-	}
-	if err = SetReceiveBuffer(conn); err != nil {
-		if !strings.Contains(err.Error(), "use of closed network connection") {
-			log.Printf("%s. See https://github.com/lucas-clemente/quic-go/wiki/UDP-Receive-Buffer-Size for details.", err)
-		} else {
-			return nil, err
-		}
-	}
-	return conn, nil
-}
-
 func SetReceiveBuffer(c net.PacketConn) error {
 	conn, ok := c.(interface{ SetReadBuffer(int) error })
 	if !ok {
