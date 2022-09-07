@@ -9,8 +9,14 @@ import (
 
 	"github.com/mengelbart/rtp-over-quic/controller"
 	"github.com/mengelbart/rtp-over-quic/media"
+	"github.com/mengelbart/rtp-over-quic/quic"
+	"github.com/mengelbart/rtp-over-quic/rtp"
+	"github.com/pion/interceptor"
+	"github.com/pion/rtcp"
 	"github.com/spf13/cobra"
 )
+
+const transportCCURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
 
 type Starter interface {
 	Start(ctx context.Context) error
@@ -71,11 +77,70 @@ const (
 
 var receiveCmd = &cobra.Command{
 	Use: "receive",
-	Run: func(_ *cobra.Command, _ []string) {
-		if err := startReceiver(); err != nil {
+	Run: func(cmd *cobra.Command, _ []string) {
+		if err := start(cmd.Context()); err != nil {
 			log.Fatal(err)
 		}
 	},
+}
+
+func start(ctx context.Context) error {
+	server, err := quic.NewServer(
+		quic.LocalAddress(addr),
+		quic.SetServerQLOGDirName(qlogDir),
+		quic.SetServerSSLKeyLogFileName(keyLogFile),
+	)
+	if err != nil {
+		return err
+	}
+	mediaOptions := []media.ConfigOption{
+		media.Codec(codec),
+	}
+	rtpOptions := []rtp.Option{
+		rtp.RegisterReceiverPacketLog(rtpDumpFile, rtcpDumpFile),
+	}
+	switch getRTCP(rtcpFeedback) {
+	case RTCP_RFC8888:
+		rtpOptions = append(rtpOptions, rtp.RegisterRFC8888())
+	case RTCP_RFC8888_PION:
+		rtpOptions = append(rtpOptions, rtp.RegisterRFC8888Pion())
+	case RTCP_TWCC:
+		rtpOptions = append(rtpOptions, rtp.RegisterTWCC())
+	}
+	server.OnNewHandler(func(h *quic.Handler) {
+		// setup media pipeline
+		ms, err := media.NewGstreamerSink(sink, mediaOptions...)
+		if err != nil {
+			panic("TODO") // TODO
+		}
+		// build interceptor
+		i, err := rtp.New(rtpOptions...)
+		if err != nil {
+			panic("TODO") // TODO
+		}
+		reader := i.BindRemoteStream(&interceptor.StreamInfo{
+			RTPHeaderExtensions: []interceptor.RTPHeaderExtension{{URI: transportCCURI, ID: 1}},
+			RTCPFeedback:        []interceptor.RTCPFeedback{{Type: "ack", Parameter: "ccfb"}},
+		}, interceptor.RTCPReaderFunc(func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
+			n, err := ms.Write(b)
+			if err != nil {
+				return 0, nil, err
+			}
+
+			return n, a, nil
+		}))
+
+		h.SetRTPReader(interceptor.RTPReaderFunc(func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
+			// TODO: Demultiplex flow ID or otherwise use attributes?
+			return reader.Read(b, a)
+		}))
+
+		i.BindRTCPWriter(interceptor.RTCPWriterFunc(func(pkts []rtcp.Packet, attributes interceptor.Attributes) (int, error) {
+			return h.WriteRTCP(pkts, attributes)
+		}))
+		go ms.Play()
+	})
+	return server.Start(ctx)
 }
 
 func startReceiver() error {

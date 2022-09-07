@@ -130,9 +130,9 @@ func startQUICSender(ctx context.Context, in interceptor.Interceptor) (intercept
 	sender, err := quic.NewSender(
 		in,
 		quic.RemoteAddress(addr),
-		quic.SetQLOGDirName(qlogDir),
-		quic.SetSSLKeyLogFileName(keyLogFile),
-		quic.SetQUICCongestionControlAlgorithm(cc.AlgorithmFromString(quicCC)),
+		quic.SetSenderQLOGDirName(qlogDir),
+		quic.SetSenderSSLKeyLogFileName(keyLogFile),
+		quic.SetSenderQUICCongestionControlAlgorithm(cc.AlgorithmFromString(quicCC)),
 		quic.SetLocalRFC8888(localRFC8888),
 	)
 	if err != nil {

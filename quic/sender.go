@@ -29,21 +29,21 @@ func RemoteAddress(addr string) SenderOption {
 	}
 }
 
-func SetQLOGDirName(dir string) SenderOption {
+func SetSenderQLOGDirName(dir string) SenderOption {
 	return func(sc *SenderConfig) error {
 		sc.qlogDirectoryName = dir
 		return nil
 	}
 }
 
-func SetSSLKeyLogFileName(file string) SenderOption {
+func SetSenderSSLKeyLogFileName(file string) SenderOption {
 	return func(sc *SenderConfig) error {
 		sc.sslKeyLogFileName = file
 		return nil
 	}
 }
 
-func SetQUICCongestionControlAlgorithm(algorithm cc.Algorithm) SenderOption {
+func SetSenderQUICCongestionControlAlgorithm(algorithm cc.Algorithm) SenderOption {
 	return func(sc *SenderConfig) error {
 		sc.cc = algorithm
 		return nil
