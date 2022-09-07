@@ -3,14 +3,9 @@ package quic
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"io"
 	"log"
-	"math/big"
 	"time"
 
 	"github.com/lucas-clemente/quic-go"
@@ -195,19 +190,14 @@ func (s *Sender) NewMediaStream() interceptor.RTPWriter {
 	var idBuffer bytes.Buffer
 	idWriter := quicvarint.NewWriter(&idBuffer)
 	quicvarint.Write(idWriter, id)
-	ms := &MediaStream{
-		sender:   s,
-		flowID:   id,
-		varIntID: idBuffer.Bytes(),
-		writer:   nil,
-	}
-	writer := s.interceptor.BindLocalStream(&interceptor.StreamInfo{}, interceptor.RTPWriterFunc(
+	idBytes := idBuffer.Bytes()
+	return s.interceptor.BindLocalStream(&interceptor.StreamInfo{}, interceptor.RTPWriterFunc(
 		func(header *pionrtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
 			headerBuf, err := header.Marshal()
 			if err != nil {
 				return 0, err
 			}
-			pl := append(ms.varIntID, headerBuf...)
+			pl := append(idBytes, headerBuf...)
 			pl = append(pl, payload...)
 
 			if s.localRFC8888 {
@@ -216,8 +206,6 @@ func (s *Sender) NewMediaStream() interceptor.RTPWriter {
 			return s.writeDgram(pl)
 		},
 	))
-	ms.writer = writer
-	return ms
 }
 func (s *Sender) ackCallback(sent time.Time, ssrc uint32, size int, seqNr uint16) func(bool) {
 	return func(b bool) {
@@ -232,38 +220,16 @@ func (s *Sender) ackCallback(sent time.Time, ssrc uint32, size int, seqNr uint16
 	}
 }
 
-type MediaStream struct {
-	sender   *Sender
-	flowID   uint64
-	varIntID []byte
-	writer   interceptor.RTPWriter
+type DataStreamWriter struct {
+	io.Writer
 }
 
-func (s *MediaStream) Write(header *pionrtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
-	return s.writer.Write(header, payload, attributes)
-}
-
-// Setup a bare-bones TLS config for the server
-func generateTLSConfig(keyLogWriter io.Writer) *tls.Config {
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+func (s *Sender) NewDataStream(ctx context.Context) (io.Writer, error) {
+	stream, err := s.conn.OpenUniStreamSync(ctx)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	template := x509.Certificate{SerialNumber: big.NewInt(1)}
-	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
-	if err != nil {
-		panic(err)
-	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-
-	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		panic(err)
-	}
-	return &tls.Config{
-		KeyLogWriter: keyLogWriter,
-		Certificates: []tls.Certificate{tlsCert},
-		NextProtos:   []string{rtpOverQUICALPN},
-	}
+	return &DataStreamWriter{
+		Writer: stream,
+	}, nil
 }

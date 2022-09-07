@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/mengelbart/rtp-over-quic/cc"
 	"github.com/mengelbart/rtp-over-quic/controller"
@@ -142,6 +144,28 @@ func startQUICSender(ctx context.Context, in interceptor.Interceptor) (intercept
 	}
 	if err := sender.Connect(ctx); err != nil {
 		return nil, err
+	}
+	if sendStream {
+		ds, err := sender.NewDataStream(ctx)
+		if err != nil {
+			return nil, err
+		}
+		go func() {
+			rand.Seed(time.Now().UnixNano())
+			buf := make([]byte, 1200)
+			for {
+				_, err := rand.Read(buf)
+				if err != nil {
+					log.Printf("failed to read random data, exiting data stream sender: %v", err)
+					return
+				}
+				_, err = ds.Write(buf)
+				if err != nil {
+					log.Printf("failed to send random data, exiting data stream sender: %v", err)
+					return
+				}
+			}
+		}()
 	}
 	return sender.NewMediaStream(), nil
 }
