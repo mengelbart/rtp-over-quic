@@ -18,16 +18,12 @@ import (
 	"github.com/lucas-clemente/quic-go/quicvarint"
 	"github.com/mengelbart/rtp-over-quic/cc"
 	"github.com/mengelbart/rtp-over-quic/logging"
+	"github.com/mengelbart/rtp-over-quic/rtp"
 	"github.com/pion/interceptor"
-	"github.com/pion/rtp"
+	pionrtp "github.com/pion/rtp"
 )
 
 const rtpOverQUICALPN = "rtp-mux-quic"
-
-type rtcpFeedback struct {
-	buf        []byte
-	attributes interceptor.Attributes
-}
 
 type SenderOption func(*SenderConfig) error
 
@@ -59,8 +55,16 @@ func SetQUICCongestionControlAlgorithm(algorithm cc.Algorithm) SenderOption {
 	}
 }
 
+func SetLocalRFC8888(enabled bool) SenderOption {
+	return func(sc *SenderConfig) error {
+		sc.localRFC8888 = enabled
+		return nil
+	}
+}
+
 type SenderConfig struct {
 	cc                cc.Algorithm
+	localRFC8888      bool
 	remoteAddr        string
 	qlogDirectoryName string
 	sslKeyLogFileName string
@@ -70,18 +74,23 @@ type Sender struct {
 	*SenderConfig
 
 	conn          quic.Connection
-	metricsTracer quiclogging.Tracer
+	metricsTracer *RTTTracer
 	interceptor   interceptor.Interceptor
-	rtcpChan      chan rtcpFeedback
+	localFeedback *localRFC8888Generator
 }
 
 func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error) {
 	s := &Sender{
-		SenderConfig:  &SenderConfig{},
+		SenderConfig: &SenderConfig{
+			cc:                cc.Reno,
+			localRFC8888:      false,
+			remoteAddr:        ":4242",
+			qlogDirectoryName: "",
+			sslKeyLogFileName: "",
+		},
 		conn:          nil,
 		metricsTracer: nil,
 		interceptor:   i,
-		rtcpChan:      make(chan rtcpFeedback),
 	}
 	for _, opt := range opts {
 		if err := opt(s.SenderConfig); err != nil {
@@ -130,13 +139,22 @@ func (s *Sender) Connect(ctx context.Context) error {
 			return len(b), a, nil
 		}),
 	)
-	go s.readRTCP(ctx, rtcpReader)
-	go s.readFromNetwork(ctx)
+
+	rtcpChan := make(chan rtp.RTCPFeedback)
+	go rtp.ReadRTCP(ctx, rtcpReader, rtcpChan)
+	go s.readFromNetwork(ctx, rtcpChan)
+
+	if s.localRFC8888 {
+		s.localFeedback = newLocalRFC8888Generator(0, s.metricsTracer, func(r rtp.RTCPFeedback) {
+			rtcpChan <- r
+		})
+		go s.localFeedback.run(ctx)
+	}
 
 	return nil
 }
 
-func (s *Sender) readFromNetwork(ctx context.Context) {
+func (s *Sender) readFromNetwork(ctx context.Context, rtcpChan chan rtp.RTCPFeedback) {
 	for {
 		buf, err := s.conn.ReceiveMessage()
 		if err != nil {
@@ -153,25 +171,15 @@ func (s *Sender) readFromNetwork(ctx context.Context) {
 			log.Printf("failed to read flow ID: %v, dropping datagram", err)
 			continue
 		}
-		s.rtcpChan <- rtcpFeedback{
-			buf:        buf[quicvarint.Len(id):],
-			attributes: nil,
+		rtcpChan <- rtp.RTCPFeedback{
+			Buffer:     buf[quicvarint.Len(id):],
+			Attributes: nil,
 		}
 	}
 }
 
-func (s *Sender) readRTCP(ctx context.Context, reader interceptor.RTCPReader) {
-	for {
-		select {
-		case report := <-s.rtcpChan:
-			_, _, err := reader.Read(report.buf, report.attributes)
-			if err != nil {
-				log.Printf("RTCP reader returned error: %v", err)
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
+func (s *Sender) writeDgramWithACKCallback(buf []byte, cb func(bool)) (int, error) {
+	return len(buf), s.conn.SendMessage(buf, nil, cb)
 }
 
 func (s *Sender) writeDgram(buf []byte) (int, error) {
@@ -194,18 +202,34 @@ func (s *Sender) NewMediaStream() interceptor.RTPWriter {
 		writer:   nil,
 	}
 	writer := s.interceptor.BindLocalStream(&interceptor.StreamInfo{}, interceptor.RTPWriterFunc(
-		func(header *rtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
+		func(header *pionrtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
 			headerBuf, err := header.Marshal()
 			if err != nil {
 				return 0, err
 			}
 			pl := append(ms.varIntID, headerBuf...)
 			pl = append(pl, payload...)
+
+			if s.localRFC8888 {
+				return s.writeDgramWithACKCallback(pl, s.ackCallback(time.Now(), header.SSRC, header.MarshalSize()+len(pl), header.SequenceNumber))
+			}
 			return s.writeDgram(pl)
 		},
 	))
 	ms.writer = writer
 	return ms
+}
+func (s *Sender) ackCallback(sent time.Time, ssrc uint32, size int, seqNr uint16) func(bool) {
+	return func(b bool) {
+		if b {
+			s.localFeedback.ack(ackedPkt{
+				sentTS: sent,
+				ssrc:   ssrc,
+				size:   size,
+				seqNr:  seqNr,
+			})
+		}
+	}
 }
 
 type MediaStream struct {
@@ -215,7 +239,7 @@ type MediaStream struct {
 	writer   interceptor.RTPWriter
 }
 
-func (s *MediaStream) Write(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
+func (s *MediaStream) Write(header *pionrtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
 	return s.writer.Write(header, payload, attributes)
 }
 

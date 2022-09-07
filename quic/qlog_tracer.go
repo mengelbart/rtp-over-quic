@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/lucas-clemente/quic-go/logging"
-	"github.com/mengelbart/rtp-over-quic/transport"
 )
 
 type RTTTracer struct {
@@ -19,10 +18,10 @@ type RTTTracer struct {
 	LatestRTT   time.Duration
 }
 
-func (q *RTTTracer) Metrics() transport.RTTStats {
+func (q *RTTTracer) Metrics() RTTStats {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	return transport.RTTStats{
+	return RTTStats{
 		MinRTT:      q.MinRTT,
 		SmoothedRTT: q.SmoothedRTT,
 		RTTVar:      q.RTTVar,

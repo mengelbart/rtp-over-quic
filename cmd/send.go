@@ -135,6 +135,7 @@ func startQUICSender(ctx context.Context, in interceptor.Interceptor) (intercept
 		quic.SetQLOGDirName(qlogDir),
 		quic.SetSSLKeyLogFileName(keyLogFile),
 		quic.SetQUICCongestionControlAlgorithm(cc.AlgorithmFromString(quicCC)),
+		quic.SetLocalRFC8888(localRFC8888),
 	)
 	if err != nil {
 		return nil, err
@@ -156,7 +157,7 @@ func startUDPSender(ctx context.Context, in interceptor.Interceptor) (intercepto
 	if err := sender.Connect(ctx); err != nil {
 		return nil, err
 	}
-	return sender, nil
+	return sender.NewMediaStream(), nil
 }
 
 func startTCPSender(ctx context.Context, in interceptor.Interceptor) (interceptor.RTPWriter, error) {
@@ -170,7 +171,7 @@ func startTCPSender(ctx context.Context, in interceptor.Interceptor) (intercepto
 	if err := sender.Connect(ctx); err != nil {
 		return nil, err
 	}
-	return sender, nil
+	return sender.NewMediaStream(), nil
 }
 
 func (c *senderController) startMedia(writer interceptor.RTPWriter) error {
