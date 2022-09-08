@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"math/rand"
 	"time"
@@ -123,7 +122,7 @@ func transportFactory(transport string) (func(context.Context, interceptor.Inter
 	case "tcp":
 		return startTCPSender, nil
 	}
-	return nil, fmt.Errorf("unknown transport: %v", transport)
+	return nil, errInvalidTransport
 }
 
 func startQUICSender(ctx context.Context, in interceptor.Interceptor) (interceptor.RTPWriter, error) {

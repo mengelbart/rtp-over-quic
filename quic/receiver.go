@@ -144,10 +144,12 @@ func (h *Handler) handle(ctx context.Context, conn quic.Connection) error {
 		select {
 		case p := <-pktChan:
 			if h.reader != nil {
-				h.reader.Read(p.buffer, interceptor.Attributes{
+				if _, _, err := h.reader.Read(p.buffer, interceptor.Attributes{
 					"flow-id":   p.flowID,
 					"transport": p.transport,
-				})
+				}); err != nil {
+					log.Printf("failed to process incoming packet: %v", err)
+				}
 			}
 
 		case <-ctx.Done():

@@ -73,9 +73,7 @@ func (s *Server) Start(ctx context.Context) error {
 				conn:   conn,
 			}
 			s.onNewHandler(&h)
-			if err = h.handle(ctx, conn); err != nil {
-				log.Printf("error on handling connection: %v", err)
-			}
+			h.handle(ctx)
 		}()
 	}
 }
@@ -93,7 +91,7 @@ func (h *Handler) SetRTPReader(r interceptor.RTPReader) {
 	h.reader = r
 }
 
-func (h *Handler) handle(ctx context.Context, conn *net.TCPConn) error {
+func (h *Handler) handle(ctx context.Context) {
 	pktChan := make(chan pkt)
 
 	var wg sync.WaitGroup
@@ -105,32 +103,34 @@ func (h *Handler) handle(ctx context.Context, conn *net.TCPConn) error {
 		select {
 		case p := <-pktChan:
 			if h.reader != nil {
-				h.reader.Read(p.buffer, interceptor.Attributes{})
+				if _, _, err := h.reader.Read(p.buffer, interceptor.Attributes{}); err != nil {
+					log.Printf("failed to process incoming packet: %v", err)
+				}
 			}
 		case <-ctx.Done():
-			return nil
+			return
 		}
 	}
 }
 
-func (h *Handler) receive(pktChan chan<- pkt) error {
+func (h *Handler) receive(pktChan chan<- pkt) {
 	prefix := make([]byte, 2)
 	for {
 		if _, err := io.ReadFull(h.conn, prefix); err != nil {
 			if errors.Is(err, io.EOF) {
-				return nil
+				return
 			}
 			log.Printf("failed to read length from TCP conn: %v, exiting", err)
-			return err
+			continue
 		}
 		length := binary.BigEndian.Uint16(prefix)
 		buf := make([]byte, length)
 		if _, err := io.ReadFull(h.conn, buf); err != nil {
 			if errors.Is(err, io.EOF) {
-				return nil
+				return
 			}
 			log.Printf("failed to read complete frame from TCP conn: %v, exiting", err)
-			return err
+			continue
 		}
 		pktChan <- pkt{
 			buffer: buf,

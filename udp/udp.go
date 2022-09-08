@@ -13,6 +13,26 @@ import (
 
 const desiredReceiveBufferSize = (1 << 20) * 2 // 2 MB
 
+func listenUDP(addr string) (*net.UDPConn, error) {
+	a, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := net.ListenUDP("udp", a)
+	if err != nil {
+		return nil, err
+	}
+	if err = SetReceiveBuffer(conn); err != nil {
+		if !strings.Contains(err.Error(), "use of closed network connection") {
+			log.Printf("%s. See https://github.com/lucas-clemente/quic-go/wiki/UDP-Receive-Buffer-Size for details.", err)
+		} else {
+			return nil, err
+		}
+	}
+	return conn, nil
+}
+
 func connectUDP(addr string) (*net.UDPConn, error) {
 	a, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
