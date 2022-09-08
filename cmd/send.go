@@ -140,7 +140,7 @@ func startQUICSender(ctx context.Context, in interceptor.Interceptor) (intercept
 		return nil, err
 	}
 	if sendStream {
-		ds, err := sender.NewDataStream(ctx)
+		ds, err := sender.NewDataStreamWithDefaultFlowID(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -161,7 +161,7 @@ func startQUICSender(ctx context.Context, in interceptor.Interceptor) (intercept
 			}
 		}()
 	}
-	return sender.NewMediaStream(), nil
+	return sender.NewMediaStream()
 }
 
 func startUDPSender(ctx context.Context, in interceptor.Interceptor) (interceptor.RTPWriter, error) {

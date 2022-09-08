@@ -3,6 +3,7 @@ package quic
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log"
 	"sync"
@@ -162,11 +163,17 @@ func (h *Handler) receiveDgrams(pktChan chan<- pkt) {
 	for {
 		msg, err := h.conn.ReceiveMessage()
 		if err != nil {
-			panic("TODO") // TODO
+			if e, ok := err.(*quic.ApplicationError); ok && e.ErrorCode == 0 {
+				log.Printf("QUIC received application error, exiting datagram receiver routine: %v", err)
+				return
+			}
+			log.Printf("failed to receive QUIC datagram: %v", err)
+			continue
 		}
 		id, err := quicvarint.Read(bytes.NewReader(msg))
 		if err != nil {
-			panic("TODO") // TODO
+			log.Printf("failed to read flow ID: %v, dropping datagram", err)
+			continue
 		}
 		offset := quicvarint.Len(id)
 		pktChan <- pkt{
@@ -182,7 +189,12 @@ func (h *Handler) acceptStreams(ctx context.Context, pktChan chan<- pkt) {
 	for {
 		stream, err := h.conn.AcceptUniStream(ctx)
 		if err != nil {
-			panic("TODO") // TODO
+			if e, ok := err.(*quic.ApplicationError); ok && e.ErrorCode == 0 {
+				log.Printf("QUIC received application error, exiting stream receiver routine: %v", err)
+				return
+			}
+			log.Printf("failed to receive from QUIC stream: %v", err)
+			continue
 		}
 		go h.readStream(stream, pktChan)
 	}
@@ -192,12 +204,21 @@ func (h *Handler) readStream(stream quic.ReceiveStream, pktChan chan<- pkt) {
 	varintReader := quicvarint.NewReader(stream)
 	id, err := quicvarint.Read(varintReader)
 	if err != nil {
-		panic("TODO") // TODO
+		log.Printf("failed to read flow ID: %v, dropping stream", err)
+		return
 	}
 	for {
 		buf, err := io.ReadAll(stream)
 		if err != nil {
-			panic("TODO") // TODO
+			if e, ok := err.(*quic.ApplicationError); ok && e.ErrorCode == 0 {
+				log.Printf("QUIC received application error, exiting stream receiver routine: %v", err)
+				return
+			}
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			log.Printf("failed to receive from QUIC stream: %v", err)
+			continue
 		}
 		pktChan <- pkt{
 			flowID:    id,

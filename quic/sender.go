@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"io"
 	"log"
+	"math"
 	"time"
 
 	"github.com/lucas-clemente/quic-go"
@@ -72,6 +74,8 @@ type Sender struct {
 	metricsTracer *RTTTracer
 	interceptor   interceptor.Interceptor
 	localFeedback *localRFC8888Generator
+
+	flowIDs map[uint64]struct{}
 }
 
 func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error) {
@@ -86,6 +90,8 @@ func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error)
 		conn:          nil,
 		metricsTracer: nil,
 		interceptor:   i,
+		localFeedback: nil,
+		flowIDs:       make(map[uint64]struct{}),
 	}
 	for _, opt := range opts {
 		if err := opt(s.SenderConfig); err != nil {
@@ -93,6 +99,16 @@ func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error)
 		}
 	}
 	return s, nil
+}
+
+func (s *Sender) newFlowID() (uint64, error) {
+	for i := uint64(0); i < math.MaxUint64; i++ {
+		if _, ok := s.flowIDs[i]; !ok {
+			s.flowIDs[i] = struct{}{}
+			return i, nil
+		}
+	}
+	return 0, errors.New("too many flows, no unused IDs left")
 }
 
 func (s *Sender) Connect(ctx context.Context) error {
@@ -181,8 +197,16 @@ func (s *Sender) writeDgram(buf []byte) (int, error) {
 	return len(buf), s.conn.SendMessage(buf, nil, nil)
 }
 
-func (s *Sender) NewMediaStream() interceptor.RTPWriter {
-	id := uint64(0)
+func (s *Sender) writeStream(buf []byte) (int, error) {
+	stream, err := s.conn.OpenUniStreamSync(context.Background())
+	if err != nil {
+		return 0, err
+	}
+	defer stream.Close()
+	return stream.Write(buf)
+}
+
+func (s *Sender) NewMediaStreamWithFlowID(id uint64) interceptor.RTPWriter {
 	var idBuffer bytes.Buffer
 	idWriter := quicvarint.NewWriter(&idBuffer)
 	quicvarint.Write(idWriter, id)
@@ -203,6 +227,15 @@ func (s *Sender) NewMediaStream() interceptor.RTPWriter {
 		},
 	))
 }
+
+func (s *Sender) NewMediaStream() (interceptor.RTPWriter, error) {
+	id, err := s.newFlowID()
+	if err != nil {
+		return nil, err
+	}
+	return s.NewMediaStreamWithFlowID(id), nil
+}
+
 func (s *Sender) ackCallback(sent time.Time, ssrc uint32, size int, seqNr uint16) func(bool) {
 	return func(b bool) {
 		if b {
@@ -220,7 +253,25 @@ type DataStreamWriter struct {
 	io.Writer
 }
 
-func (s *Sender) NewDataStream(ctx context.Context) (io.Writer, error) {
+func (s *Sender) NewDataStreamWithFlowID(ctx context.Context, id uint64) (io.Writer, error) {
+	stream, err := s.conn.OpenUniStreamSync(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var idBuffer bytes.Buffer
+	idWriter := quicvarint.NewWriter(&idBuffer)
+	quicvarint.Write(idWriter, id)
+	idBytes := idBuffer.Bytes()
+	_, err = stream.Write(idBytes)
+	if err != nil {
+		return nil, err
+	}
+	return &DataStreamWriter{
+		Writer: stream,
+	}, nil
+}
+
+func (s *Sender) NewDataStreamWithoutFlowID(ctx context.Context) (io.Writer, error) {
 	stream, err := s.conn.OpenUniStreamSync(ctx)
 	if err != nil {
 		return nil, err
@@ -228,4 +279,12 @@ func (s *Sender) NewDataStream(ctx context.Context) (io.Writer, error) {
 	return &DataStreamWriter{
 		Writer: stream,
 	}, nil
+}
+
+func (s *Sender) NewDataStreamWithDefaultFlowID(ctx context.Context) (io.Writer, error) {
+	id, err := s.newFlowID()
+	if err != nil {
+		return nil, err
+	}
+	return s.NewDataStreamWithFlowID(ctx, id)
 }
