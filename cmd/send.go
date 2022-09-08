@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/mengelbart/rtp-over-quic/cc"
-	"github.com/mengelbart/rtp-over-quic/controller"
 	"github.com/mengelbart/rtp-over-quic/media"
 	"github.com/mengelbart/rtp-over-quic/quic"
 	"github.com/mengelbart/rtp-over-quic/rtp"
@@ -67,7 +66,7 @@ func (c *senderController) setupInterceptor(ctx context.Context) (interceptor.In
 		rtp.RegisterSenderPacketLog(rtpDumpFile, rtcpDumpFile),
 	}
 
-	if rtpCC == controller.SCReAM.String() {
+	if rtpCC == cc.SCReAM.String() {
 		bwe, err := rtp.NewBandwidthEstimator(ccDump)
 		if err != nil {
 			return nil, err
@@ -80,7 +79,7 @@ func (c *senderController) setupInterceptor(ctx context.Context) (interceptor.In
 		}()
 		rtpOptions = append(rtpOptions, rtp.RegisterSCReAM(bwe.OnNewSCReAMEstimator, int(initialTargetBitrate)))
 	}
-	if rtpCC == controller.GCC.String() {
+	if rtpCC == cc.GCC.String() {
 		bwe, err := rtp.NewBandwidthEstimator(ccDump)
 		if err != nil {
 			return nil, err
