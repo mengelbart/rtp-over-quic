@@ -114,7 +114,7 @@ func (c *senderController) start(ctx context.Context) error {
 
 func transportFactory(transport string) (func(context.Context, interceptor.Interceptor) (interceptor.RTPWriter, error), error) {
 	switch transport {
-	case "quic":
+	case "quic", "quic-prio":
 		return startQUICSender, nil
 	case "udp":
 		return startUDPSender, nil

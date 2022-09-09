@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net"
 	"sync"
 
 	"github.com/lucas-clemente/quic-go"
@@ -167,7 +168,11 @@ func (h *Handler) receiveDgrams(pktChan chan<- pkt) {
 				log.Printf("QUIC received application error, exiting datagram receiver routine: %v", err)
 				return
 			}
-			log.Printf("failed to receive QUIC datagram: %v", err)
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				log.Printf("QUIC connection timed out, exiting datagram receiver routine: %v", err)
+				return
+			}
+			log.Printf("failed to receive QUIC datagram: %T", err)
 			continue
 		}
 		id, err := quicvarint.Read(bytes.NewReader(msg))
@@ -193,6 +198,10 @@ func (h *Handler) acceptStreams(ctx context.Context, pktChan chan<- pkt) {
 				log.Printf("QUIC received application error, exiting stream receiver routine: %v", err)
 				return
 			}
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				log.Printf("QUIC connection timed out, exiting stream accepting routine: %v", err)
+				return
+			}
 			log.Printf("failed to receive from QUIC stream: %v", err)
 			continue
 		}
@@ -207,24 +216,26 @@ func (h *Handler) readStream(stream quic.ReceiveStream, pktChan chan<- pkt) {
 		log.Printf("failed to read flow ID: %v, dropping stream", err)
 		return
 	}
-	for {
-		buf, err := io.ReadAll(stream)
-		if err != nil {
-			if e, ok := err.(*quic.ApplicationError); ok && e.ErrorCode == 0 {
-				log.Printf("QUIC received application error, exiting stream receiver routine: %v", err)
-				return
-			}
-			if errors.Is(err, io.EOF) {
-				return
-			}
-			log.Printf("failed to receive from QUIC stream: %v", err)
-			continue
+	buf, err := io.ReadAll(stream)
+	if err != nil {
+		if e, ok := err.(*quic.ApplicationError); ok && e.ErrorCode == 0 {
+			log.Printf("QUIC received application error, exiting stream receiver routine: %v", err)
+			return
 		}
-		pktChan <- pkt{
-			flowID:    id,
-			transport: STREAM,
-			buffer:    buf,
+		if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			log.Printf("QUIC connection timed out, exiting stream reader routine: %v", err)
+			return
 		}
+		if errors.Is(err, io.EOF) {
+			return
+		}
+		log.Printf("failed to receive from QUIC stream: %v", err)
+		return
+	}
+	pktChan <- pkt{
+		flowID:    id,
+		transport: STREAM,
+		buffer:    buf,
 	}
 }
 

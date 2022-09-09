@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"net"
 	"time"
 
 	"github.com/lucas-clemente/quic-go"
@@ -60,11 +61,13 @@ func SetLocalRFC8888(enabled bool) SenderOption {
 }
 
 type SenderConfig struct {
-	cc                cc.Algorithm
-	localRFC8888      bool
 	remoteAddr        string
 	qlogDirectoryName string
 	sslKeyLogFileName string
+
+	cc           cc.Algorithm
+	localRFC8888 bool
+	maxMTU       uint
 }
 
 type Sender struct {
@@ -81,11 +84,12 @@ type Sender struct {
 func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error) {
 	s := &Sender{
 		SenderConfig: &SenderConfig{
-			cc:                cc.Reno,
-			localRFC8888:      false,
 			remoteAddr:        ":4242",
 			qlogDirectoryName: "",
 			sslKeyLogFileName: "",
+			cc:                cc.Reno,
+			localRFC8888:      false,
+			maxMTU:            1300,
 		},
 		conn:          nil,
 		metricsTracer: nil,
@@ -173,6 +177,10 @@ func (s *Sender) readFromNetwork(ctx context.Context, rtcpChan chan rtp.RTCPFeed
 				log.Printf("QUIC received application error, exiting reader routine: %v", err)
 				return
 			}
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				log.Printf("QUIC connection timed out, exiting datagram receiver routine: %v", err)
+				return
+			}
 			log.Printf("failed to receive QUIC datagram: %v", err)
 			continue
 		}
@@ -212,7 +220,7 @@ func (s *Sender) NewMediaStreamWithFlowID(id uint64) interceptor.RTPWriter {
 	quicvarint.Write(idWriter, id)
 	idBytes := idBuffer.Bytes()
 	return s.interceptor.BindLocalStream(&interceptor.StreamInfo{}, interceptor.RTPWriterFunc(
-		func(header *pionrtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
+		func(header *pionrtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
 			headerBuf, err := header.Marshal()
 			if err != nil {
 				return 0, err
@@ -220,8 +228,24 @@ func (s *Sender) NewMediaStreamWithFlowID(id uint64) interceptor.RTPWriter {
 			pl := append(idBytes, headerBuf...)
 			pl = append(pl, payload...)
 
-			if s.localRFC8888 {
-				return s.writeDgramWithACKCallback(pl, s.ackCallback(time.Now(), header.SSRC, header.MarshalSize()+len(pl), header.SequenceNumber))
+			mtu := uint(len(pl))
+			if mtu > s.maxMTU {
+				if s.localRFC8888 {
+					log.Println("WARNING: Sending on stream due to too large MTU, but local CC FB (RFC8888) generation was requested, which is currently not implemented for QUIC streams")
+				}
+				return s.writeStream(pl)
+			}
+
+			if attributes == nil {
+				if s.localRFC8888 {
+					return s.writeDgramWithACKCallback(pl, s.ackCallback(time.Now(), header.SSRC, header.MarshalSize()+len(pl), header.SequenceNumber))
+				}
+				return s.writeDgram(pl)
+			}
+
+			reliability := attributes.Get(rtp.RELIABILITY)
+			if reliability != nil && reliability.(rtp.Reliability) == rtp.REQUIRED {
+				return s.writeStream(pl)
 			}
 			return s.writeDgram(pl)
 		},

@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"time"
 
 	"github.com/mengelbart/gst-go/gstreamer"
+	"github.com/mengelbart/rtp-over-quic/rtp"
 	"github.com/pion/interceptor"
-	"github.com/pion/rtp"
+	pionrtp "github.com/pion/rtp"
 )
 
 type mtuGetter interface {
@@ -25,7 +27,6 @@ type GstreamerSource struct {
 	rtpWriter        interceptor.RTPWriter
 	useGstPacketizer bool
 	close            chan struct{}
-	mtuGetter        mtuGetter
 }
 
 func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, useGstPacketizer bool, opts ...ConfigOption) (*GstreamerSource, error) {
@@ -74,7 +75,6 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, useGstPacke
 		builder = append(builder, gstreamer.NewElement(fmt.Sprintf("%venc", c.codec),
 			gstreamer.Set("name", "encoder"),
 			gstreamer.Set("error-resilient", "default"),
-			gstreamer.Set("keyframe-max-dist", 300),
 			gstreamer.Set("cpu-used", 4),
 			gstreamer.Set("deadline", 1),
 		))
@@ -139,13 +139,13 @@ func (s *GstreamerSource) Play() error {
 	})
 	go s.pipeline.Start()
 
-	var packetizer rtp.Packetizer
+	var packetizer pionrtp.Packetizer
 	if !s.useGstPacketizer {
 		payloader, err := payloaderForCodec(s.codec)
 		if err != nil {
 			return err
 		}
-		packetizer = rtp.NewPacketizer(s.payloadType, s.ssrc, payloader, rtp.NewFixedSequencer(0), 90_000)
+		packetizer = pionrtp.NewPacketizer(s.payloadType, s.ssrc, payloader, pionrtp.NewFixedSequencer(0), 90_000)
 	}
 
 	for {
@@ -159,28 +159,50 @@ func (s *GstreamerSource) Play() error {
 			if !s.useGstPacketizer {
 				samples := uint32((time.Duration(buffer.Duration).Seconds()) * float64(s.clockRate))
 
-				mtu := s.mtuGetter.getMTU(buffer)
+				attributes := interceptor.Attributes{
+					rtp.RELIABILITY: rtp.NOT_REQUIRED,
+				}
+				mtu := s.mtu
+				if s.codec == "h264" && isH264KeyFrame(buffer.Bytes) {
+					attributes.Set(rtp.RELIABILITY, rtp.REQUIRED)
+					mtu = math.MaxUint64
+				}
+				if s.codec == "vp8" && isVP8KeyFrame(buffer.Bytes) {
+					attributes.Set(rtp.RELIABILITY, rtp.REQUIRED)
+					mtu = math.MaxInt32
+				}
+
 				// TODO: set mtu based on frame type instead of just taking s.mtu
 				pkts := packetizer.Packetize(mtu, buffer.Bytes, samples)
 				for _, pkt := range pkts {
-					_, err := s.rtpWriter.Write(&pkt.Header, pkt.Payload, nil)
+					_, err := s.rtpWriter.Write(&pkt.Header, pkt.Payload, attributes)
 					if err != nil {
+						log.Printf("rtpWriter.Write error: %v", err)
 						return err
 					}
 				}
 			} else {
-				var pkt rtp.Packet
+				var pkt pionrtp.Packet
 				err := pkt.Unmarshal(buffer.Bytes)
 				if err != nil {
 					return err
 				}
 				_, err = s.rtpWriter.Write(&pkt.Header, pkt.Payload, nil)
 				if err != nil {
+					log.Printf("rtpWriter.Write error: %v", err)
 					return err
 				}
 			}
 		}
 	}
+}
+
+func isH264KeyFrame(buffer []byte) bool {
+	return buffer[0]&0x60 == 0x60
+}
+
+func isVP8KeyFrame(buffer []byte) bool {
+	return (buffer[0]&0x20)>>5 == 0
 }
 
 func (s *GstreamerSource) Stop() error {
