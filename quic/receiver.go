@@ -241,5 +241,5 @@ func (h *Handler) WriteRTCP(pkts []rtcp.Packet, attributes interceptor.Attribute
 	idWriter := quicvarint.NewWriter(&idBuf)
 	quicvarint.Write(idWriter, id)
 	msg := append(idBuf.Bytes(), buf...)
-	return len(buf), h.conn.SendMessage(msg, nil, nil)
+	return len(buf), h.conn.SendMessage(msg, nil)
 }

@@ -298,8 +298,8 @@ github.com/mattn/go-isatty v0.0.14/go.mod h1:7GGIvUiUoEMVVmxf/4nioHXj79iQHKdU27k
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
 github.com/mengelbart/gst-go v0.0.0-20220824124234-80d4e9fbbda6 h1:tvyh8lLqLoS1JxTggnFepVvLyY8MTtPZr6zKoQFEiyU=
 github.com/mengelbart/gst-go v0.0.0-20220824124234-80d4e9fbbda6/go.mod h1:J9js686VBdevB5wQODy0ZTDtUsMipxoSpedYVXsJ1vU=
-github.com/mengelbart/quic-go v0.7.1-0.20220823120832-603bb8701f28 h1:G3regLvmkCejsnlaXl4YbQSsqNHiUd+wqZgf06JycRc=
-github.com/mengelbart/quic-go v0.7.1-0.20220823120832-603bb8701f28/go.mod h1:CTcNfLYJS2UuRNB+zcNlgvkjBhxX6Hm3WUxxAQx2mgE=
+github.com/mengelbart/quic-go v0.7.1-0.20220909152858-db1304569a92 h1:syEmUszezugZQjCadXbOKgpEQfXYAFCdD72kOznJkMA=
+github.com/mengelbart/quic-go v0.7.1-0.20220909152858-db1304569a92/go.mod h1:CTcNfLYJS2UuRNB+zcNlgvkjBhxX6Hm3WUxxAQx2mgE=
 github.com/mengelbart/rtp v1.7.14-0.20220728010821-271390af6fab h1:1CHgU3Xf+kSJcl6K4LtPjsVo1XSGMuS6FNkSeDNrptk=
 github.com/mengelbart/rtp v1.7.14-0.20220728010821-271390af6fab/go.mod h1:bDb5n+BFZxXx0Ea7E5qe+klMuqiBrP+w8XSjiWtCUko=
 github.com/mengelbart/scream-go v0.4.0 h1:XrjtTXDZw38yZAVRJI5c4Ysz1gjcFwj62mdOqTVQRE0=
@@ -582,7 +582,6 @@ golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a/go.mod h1:RxMgew5VJxzue5/jJ
 golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20201207232520-09787c993a3a/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
-golang.org/x/sync v0.0.0-20210220032951-036812b2e83c h1:5KslGYwFpkhGh+Q16bwMP3cOontH8FOep7tGV86Y7SQ=
 golang.org/x/sync v0.0.0-20210220032951-036812b2e83c/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sys v0.0.0-20180823144017-11551d06cbcc/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20180830151530-49385e6e1522/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=

@@ -190,11 +190,11 @@ func (s *Sender) readFromNetwork(ctx context.Context, rtcpChan chan rtp.RTCPFeed
 }
 
 func (s *Sender) writeDgramWithACKCallback(buf []byte, cb func(bool)) (int, error) {
-	return len(buf), s.conn.SendMessage(buf, nil, cb)
+	return len(buf), s.conn.SendMessage(buf, cb)
 }
 
 func (s *Sender) writeDgram(buf []byte) (int, error) {
-	return len(buf), s.conn.SendMessage(buf, nil, nil)
+	return len(buf), s.conn.SendMessage(buf, nil)
 }
 
 func (s *Sender) writeStream(buf []byte) (int, error) {

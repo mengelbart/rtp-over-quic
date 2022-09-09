@@ -66,6 +66,9 @@ func (q *RTTTracer) TracerForConnection(ctx context.Context, p logging.Perspecti
 func (q *RTTTracer) SentPacket(addr net.Addr, header *logging.Header, count logging.ByteCount, frames []logging.Frame) {
 }
 
+func (q *RTTTracer) SentVersionNegotiationPacket(_ net.Addr, dest, src logging.ArbitraryLenConnectionID, _ []logging.VersionNumber) {
+}
+
 func (q *RTTTracer) DroppedPacket(addr net.Addr, packetType logging.PacketType, count logging.ByteCount, reason logging.PacketDropReason) {
 }
 
@@ -82,13 +85,19 @@ func (c *ConnectionRTTTracer) ReceivedPacket(hdr *logging.ExtendedHeader, size l
 func (c *ConnectionRTTTracer) RestoredTransportParameters(parameters *logging.TransportParameters) {
 }
 
-func (c ConnectionRTTTracer) ReceivedVersionNegotiationPacket(header *logging.Header, numbers []logging.VersionNumber) {
+func (c ConnectionRTTTracer) ReceivedVersionNegotiationPacket(dest, src logging.ArbitraryLenConnectionID, _ []logging.VersionNumber) {
 }
 
 func (c ConnectionRTTTracer) NegotiatedVersion(chosen logging.VersionNumber, clientVersions, serverVersions []logging.VersionNumber) {
 }
 
 func (c ConnectionRTTTracer) ReceivedRetry(header *logging.Header) {
+}
+
+func (c ConnectionRTTTracer) ReceivedLongHeaderPacket(hdr *logging.ExtendedHeader, size logging.ByteCount, frames []logging.Frame) {
+}
+
+func (c ConnectionRTTTracer) ReceivedShortHeaderPacket(hdr *logging.ShortHeader, size logging.ByteCount, frames []logging.Frame) {
 }
 
 func (c ConnectionRTTTracer) StartedConnection(local, remote net.Addr, srcConnID, destConnID logging.ConnectionID) {

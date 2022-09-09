@@ -12,7 +12,6 @@ require (
 	github.com/pion/rtcp v1.2.10
 	github.com/pion/rtp v1.7.13
 	github.com/spf13/cobra v1.3.0
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
 )
 
@@ -37,6 +36,6 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-replace github.com/lucas-clemente/quic-go v0.28.1 => github.com/mengelbart/quic-go v0.7.1-0.20220823120832-603bb8701f28
+replace github.com/lucas-clemente/quic-go v0.28.1 => github.com/mengelbart/quic-go v0.7.1-0.20220909152858-db1304569a92
 
 replace github.com/pion/rtp v1.7.13 => github.com/mengelbart/rtp v1.7.14-0.20220728010821-271390af6fab
