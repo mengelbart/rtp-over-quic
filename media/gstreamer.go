@@ -11,6 +11,7 @@ import (
 	"github.com/mengelbart/rtp-over-quic/rtp"
 	"github.com/pion/interceptor"
 	pionrtp "github.com/pion/rtp"
+	"github.com/pion/webrtc/v3/pkg/media/h264reader"
 )
 
 type mtuGetter interface {
@@ -87,6 +88,7 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, useGstPacke
 			gstreamer.Set("pass", 5),
 			gstreamer.Set("speed-preset", 4),
 			gstreamer.Set("tune", 4),
+			// gstreamer.Set("key-int-max", 10),
 		))
 		if useGstPacketizer {
 			builder = append(builder, gstreamer.NewElement("rtph264pay", payloaderSettings...))
@@ -163,16 +165,11 @@ func (s *GstreamerSource) Play() error {
 					rtp.RELIABILITY: rtp.NOT_REQUIRED,
 				}
 				mtu := s.mtu
-				if s.codec == "h264" && isH264KeyFrame(buffer.Bytes) {
+				if isKeyFrame(s.codec, buffer.Bytes) {
 					attributes.Set(rtp.RELIABILITY, rtp.REQUIRED)
-					mtu = math.MaxUint64
-				}
-				if s.codec == "vp8" && isVP8KeyFrame(buffer.Bytes) {
-					attributes.Set(rtp.RELIABILITY, rtp.REQUIRED)
-					mtu = math.MaxInt32
+					mtu = math.MaxUint16
 				}
 
-				// TODO: set mtu based on frame type instead of just taking s.mtu
 				pkts := packetizer.Packetize(mtu, buffer.Bytes, samples)
 				for _, pkt := range pkts {
 					_, err := s.rtpWriter.Write(&pkt.Header, pkt.Payload, attributes)
@@ -197,12 +194,40 @@ func (s *GstreamerSource) Play() error {
 	}
 }
 
-func isH264KeyFrame(buffer []byte) bool {
-	return buffer[0]&0x60 == 0x60
-}
+func isKeyFrame(codec string, buffer []byte) bool {
+	switch codec {
+	case "vp8":
+		return buffer[0]&0x1 == 0
+	case "h264":
+		r, w := io.Pipe()
+		hr, err := h264reader.NewReader(r)
+		if err != nil {
+			panic(err)
+		}
+		go func() {
+			_, verr := w.Write(buffer)
+			if verr != nil {
+				panic(verr)
+			}
+			r.Close()
+		}()
+		hasIDR := false
+		nal, err := hr.NextNAL()
+		for nal != nil && err != io.EOF {
+			if err != nil {
+				panic(err)
+			}
+			nal, err = hr.NextNAL()
+			if nal != nil {
+				if nal.UnitType == h264reader.NalUnitTypeCodedSliceIdr {
+					hasIDR = true
+				}
+			}
+		}
 
-func isVP8KeyFrame(buffer []byte) bool {
-	return (buffer[0]&0x20)>>5 == 0
+		return hasIDR
+	}
+	return false
 }
 
 func (s *GstreamerSource) Stop() error {

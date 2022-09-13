@@ -233,20 +233,25 @@ func (s *Sender) NewMediaStreamWithFlowID(id uint64) interceptor.RTPWriter {
 				if s.localRFC8888 {
 					log.Println("WARNING: Sending on stream due to too large MTU, but local CC FB (RFC8888) generation was requested, which is currently not implemented for QUIC streams")
 				}
+				// log.Printf("send stream due to mtu>s.maxMTU")
 				return s.writeStream(pl)
 			}
 
 			if attributes == nil {
 				if s.localRFC8888 {
+					// log.Printf("send dgram with ACK callback due to nil attributes")
 					return s.writeDgramWithACKCallback(pl, s.ackCallback(time.Now(), header.SSRC, header.MarshalSize()+len(pl), header.SequenceNumber))
 				}
+				// log.Printf("send dgram due to nil attributes")
 				return s.writeDgram(pl)
 			}
 
 			reliability := attributes.Get(rtp.RELIABILITY)
 			if reliability != nil && reliability.(rtp.Reliability) == rtp.REQUIRED {
+				// log.Printf("send stream due reliability == REQUIRED")
 				return s.writeStream(pl)
 			}
+			// log.Printf("send dgram due reliability != REQUIRED")
 			return s.writeDgram(pl)
 		},
 	))
