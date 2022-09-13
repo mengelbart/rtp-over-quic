@@ -55,7 +55,7 @@ func start(ctx context.Context) error {
 	rc := newReceiverController()
 
 	switch transport {
-	case "quic":
+	case "quic", "quic-prio":
 		return startQUIC(ctx, rc)
 	case "udp":
 		return startUDP(ctx, rc)
