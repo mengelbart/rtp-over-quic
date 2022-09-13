@@ -3,12 +3,10 @@ package scream
 import (
 	"container/list"
 	"sync"
-
-	"github.com/pion/rtp"
 )
 
 type rtpQueueItem struct {
-	packet *rtp.Packet
+	packet *packet
 	ts     float64
 }
 
@@ -31,7 +29,7 @@ func (q *queue) SizeOfNextRTP() int {
 		return 0
 	}
 
-	return q.queue.Front().Value.(rtpQueueItem).packet.MarshalSize()
+	return q.queue.Front().Value.(rtpQueueItem).packet.rtp.MarshalSize()
 }
 
 func (q *queue) SeqNrOfNextRTP() uint16 {
@@ -42,7 +40,7 @@ func (q *queue) SeqNrOfNextRTP() uint16 {
 		return 0
 	}
 
-	return q.queue.Front().Value.(rtpQueueItem).packet.SequenceNumber
+	return q.queue.Front().Value.(rtpQueueItem).packet.rtp.SequenceNumber
 }
 
 func (q *queue) SeqNrOfLastRTP() uint16 {
@@ -53,7 +51,7 @@ func (q *queue) SeqNrOfLastRTP() uint16 {
 		return 0
 	}
 
-	return q.queue.Back().Value.(rtpQueueItem).packet.SequenceNumber
+	return q.queue.Back().Value.(rtpQueueItem).packet.rtp.SequenceNumber
 }
 
 func (q *queue) BytesInQueue() int {
@@ -91,7 +89,7 @@ func (q *queue) GetSizeOfLastFrame() int {
 		return 0
 	}
 
-	return q.queue.Back().Value.(rtpQueueItem).packet.MarshalSize()
+	return q.queue.Back().Value.(rtpQueueItem).packet.rtp.MarshalSize()
 }
 
 func (q *queue) Clear() int {
@@ -104,18 +102,18 @@ func (q *queue) Clear() int {
 	return size
 }
 
-func (q *queue) Enqueue(packet *rtp.Packet, ts float64) {
+func (q *queue) Enqueue(pkt *packet, ts float64) {
 	q.m.Lock()
 	defer q.m.Unlock()
 
-	q.bytesInQueue += packet.MarshalSize()
+	q.bytesInQueue += pkt.rtp.MarshalSize()
 	q.queue.PushBack(rtpQueueItem{
-		packet: packet,
+		packet: pkt,
 		ts:     float64(ts),
 	})
 }
 
-func (q *queue) Dequeue() *rtp.Packet {
+func (q *queue) Dequeue() *packet {
 	q.m.Lock()
 	defer q.m.Unlock()
 
@@ -126,6 +124,6 @@ func (q *queue) Dequeue() *rtp.Packet {
 	front := q.queue.Front()
 	q.queue.Remove(front)
 	packet := front.Value.(rtpQueueItem).packet
-	q.bytesInQueue -= packet.MarshalSize()
+	q.bytesInQueue -= packet.rtp.MarshalSize()
 	return packet
 }

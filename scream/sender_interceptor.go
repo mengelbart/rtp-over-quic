@@ -25,9 +25,9 @@ type NewPeerConnectionCallback func(id string, estimator BandwidthEstimator)
 type RTPQueue interface {
 	scream.RTPQueue
 	// Enqueue adds a new packet to the end of the queue.
-	Enqueue(packet *rtp.Packet, ts float64)
+	Enqueue(packet *packet, ts float64)
 	// Dequeue removes and returns the first packet in the queue.
-	Dequeue() *rtp.Packet
+	Dequeue() *packet
 }
 
 type localStream struct {
@@ -220,15 +220,19 @@ func (s *SenderInterceptor) BindLocalStream(info *interceptor.StreamInfo, writer
 
 	go s.loopPacingTimer(writer, info.SSRC)
 
-	return interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, _ interceptor.Attributes) (int, error) {
-		t := s.getTimeNTP(time.Now())
+	return interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
+		now := time.Now()
+		t := s.getTimeNTP(now)
 
 		buf := make([]byte, len(payload))
 		copy(buf, payload)
 		pkt := &rtp.Packet{Header: header.Clone(), Payload: buf}
 
-		// TODO: should attributes be stored in the queue, so we can pass them on later (see below)?
-		rtpQueue.Enqueue(pkt, float64(t)/65536.0)
+		rtpQueue.Enqueue(&packet{
+			rtp:        pkt,
+			timestamp:  now,
+			attributes: attributes,
+		}, float64(t)/65536.0)
 		size := pkt.MarshalSize()
 		s.m.Lock()
 		s.tx.NewMediaFrame(t, header.SSRC, size)
@@ -308,11 +312,11 @@ func (s *SenderInterceptor) loopPacingTimer(writer interceptor.RTPWriter, ssrc u
 					break
 				}
 				// TODO: Forward attributes from above?
-				if _, err := writer.Write(&packet.Header, packet.Payload, interceptor.Attributes{}); err != nil {
+				if _, err := writer.Write(&packet.rtp.Header, packet.rtp.Payload, packet.attributes); err != nil {
 					s.log.Warnf("failed sending RTP packet: %+v", err)
 				}
 				s.m.Lock()
-				s.tx.AddTransmitted(s.getTimeNTP(time.Now()), ssrc, packet.MarshalSize(), packet.SequenceNumber, packet.Marker)
+				s.tx.AddTransmitted(s.getTimeNTP(time.Now()), ssrc, packet.rtp.MarshalSize(), packet.rtp.SequenceNumber, packet.rtp.Marker)
 				count++
 				s.m.Unlock()
 			}

@@ -41,8 +41,9 @@ func NewReceiverInterceptor(opts ...ReceiverOption) (*ReceiverInterceptorFactory
 }
 
 type packet struct {
-	rtp       rtp.Packet
-	timestamp time.Time
+	rtp        *rtp.Packet
+	timestamp  time.Time
+	attributes interceptor.Attributes
 }
 
 // ReceiverInterceptor generates Feedback for SCReAM congestion control
@@ -113,7 +114,7 @@ func (r *ReceiverInterceptor) BindRemoteStream(info *interceptor.StreamInfo, rea
 		}
 
 		r.receive <- &packet{
-			rtp:       pkt,
+			rtp:       &pkt,
 			timestamp: timestamp,
 		}
 
