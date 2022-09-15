@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"math/rand"
 	"time"
@@ -114,19 +115,20 @@ func (c *senderController) start(ctx context.Context) error {
 
 func transportFactory(transport string) (func(context.Context, interceptor.Interceptor) (interceptor.RTPWriter, error), error) {
 	switch transport {
-	case "quic", "quic-prio":
+	case "quic", "quic-dgram", "quic-stream", "quic-prio":
 		return startQUICSender, nil
 	case "udp":
 		return startUDPSender, nil
 	case "tcp":
 		return startTCPSender, nil
 	}
-	return nil, errInvalidTransport
+	return nil, fmt.Errorf("%w: %v", errInvalidTransport, transport)
 }
 
 func startQUICSender(ctx context.Context, in interceptor.Interceptor) (interceptor.RTPWriter, error) {
 	sender, err := quic.NewSender(
 		in,
+		quic.SetTransportMode(quic.TransportModeFromString(transport)),
 		quic.RemoteAddress(addr),
 		quic.SetSenderQLOGDirName(qlogDir),
 		quic.SetSenderSSLKeyLogFileName(keyLogFile),

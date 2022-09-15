@@ -60,14 +60,22 @@ func SetLocalRFC8888(enabled bool) SenderOption {
 	}
 }
 
+func SetTransportMode(mode TransportMode) SenderOption {
+	return func(sc *SenderConfig) error {
+		sc.transportMode = mode
+		return nil
+	}
+}
+
 type SenderConfig struct {
 	remoteAddr        string
 	qlogDirectoryName string
 	sslKeyLogFileName string
 
-	cc           cc.Algorithm
-	localRFC8888 bool
-	maxMTU       uint
+	cc            cc.Algorithm
+	localRFC8888  bool
+	maxMTU        uint
+	transportMode TransportMode
 }
 
 type Sender struct {
@@ -90,6 +98,7 @@ func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error)
 			cc:                cc.Reno,
 			localRFC8888:      false,
 			maxMTU:            1300,
+			transportMode:     ANY,
 		},
 		conn:          nil,
 		metricsTracer: nil,
@@ -197,12 +206,8 @@ func (s *Sender) readFromNetwork(ctx context.Context, rtcpChan chan rtp.RTCPFeed
 	}
 }
 
-func (s *Sender) writeDgramWithACKCallback(buf []byte, cb func(bool)) (int, error) {
+func (s *Sender) writeDgram(buf []byte, cb func(bool)) (int, error) {
 	return len(buf), s.conn.SendMessage(buf, cb)
-}
-
-func (s *Sender) writeDgram(buf []byte) (int, error) {
-	return len(buf), s.conn.SendMessage(buf, nil)
 }
 
 func (s *Sender) writeStream(buf []byte) (int, error) {
@@ -228,6 +233,16 @@ func (s *Sender) NewMediaStreamWithFlowID(id uint64) interceptor.RTPWriter {
 			pl := append(idBytes, headerBuf...)
 			pl = append(pl, payload...)
 
+			if s.transportMode == DGRAM {
+				// log.Printf("send dgram with ACK callback due to DGRAM transportMode")
+				return s.writeDgram(pl, s.ackCallback(time.Now(), header.SSRC, header.MarshalSize()+len(pl), header.SequenceNumber))
+			}
+
+			if s.transportMode == STREAM {
+				// log.Printf("send stream due to STREAM transportMode")
+				return s.writeStream(pl)
+			}
+
 			mtu := uint(len(pl))
 			if mtu > s.maxMTU {
 				if s.localRFC8888 {
@@ -238,12 +253,8 @@ func (s *Sender) NewMediaStreamWithFlowID(id uint64) interceptor.RTPWriter {
 			}
 
 			if attributes == nil {
-				if s.localRFC8888 {
-					// log.Printf("send dgram with ACK callback due to nil attributes")
-					return s.writeDgramWithACKCallback(pl, s.ackCallback(time.Now(), header.SSRC, header.MarshalSize()+len(pl), header.SequenceNumber))
-				}
-				// log.Printf("send dgram due to nil attributes")
-				return s.writeDgram(pl)
+				// log.Printf("send dgram with ACK callback due to nil attributes")
+				return s.writeDgram(pl, s.ackCallback(time.Now(), header.SSRC, header.MarshalSize()+len(pl), header.SequenceNumber))
 			}
 
 			reliability := attributes.Get(rtp.RELIABILITY)
@@ -252,7 +263,7 @@ func (s *Sender) NewMediaStreamWithFlowID(id uint64) interceptor.RTPWriter {
 				return s.writeStream(pl)
 			}
 			// log.Printf("send dgram due reliability != REQUIRED")
-			return s.writeDgram(pl)
+			return s.writeDgram(pl, s.ackCallback(time.Now(), header.SSRC, header.MarshalSize()+len(pl), header.SequenceNumber))
 		},
 	))
 }
@@ -266,16 +277,19 @@ func (s *Sender) NewMediaStream() (interceptor.RTPWriter, error) {
 }
 
 func (s *Sender) ackCallback(sent time.Time, ssrc uint32, size int, seqNr uint16) func(bool) {
-	return func(b bool) {
-		if b {
-			s.localFeedback.ack(ackedPkt{
-				sentTS: sent,
-				ssrc:   ssrc,
-				size:   size,
-				seqNr:  seqNr,
-			})
+	if s.localRFC8888 {
+		return func(b bool) {
+			if b {
+				s.localFeedback.ack(ackedPkt{
+					sentTS: sent,
+					ssrc:   ssrc,
+					size:   size,
+					seqNr:  seqNr,
+				})
+			}
 		}
 	}
+	return nil
 }
 
 type DataStreamWriter struct {

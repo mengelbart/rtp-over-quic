@@ -106,14 +106,6 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
-type TransportMode int
-
-const (
-	DGRAM TransportMode = iota
-	STREAM
-	PRIORITIZED
-)
-
 func (s *Server) OnNewHandler(f func(*Handler)) {
 	s.onNewHandler = f
 }

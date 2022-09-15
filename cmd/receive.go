@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/mengelbart/rtp-over-quic/media"
@@ -55,14 +56,14 @@ func start(ctx context.Context) error {
 	rc := newReceiverController()
 
 	switch transport {
-	case "quic", "quic-prio":
+	case "quic", "quic-dgram", "quic-stream", "quic-prio":
 		return startQUIC(ctx, rc)
 	case "udp":
 		return startUDP(ctx, rc)
 	case "tcp":
 		return startTCP(ctx, rc)
 	}
-	return errInvalidTransport
+	return fmt.Errorf("%w: %v", errInvalidTransport, transport)
 }
 
 func startTCP(ctx context.Context, rc *receiverController) error {

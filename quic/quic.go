@@ -8,6 +8,25 @@ import (
 	"github.com/mengelbart/rtp-over-quic/logging"
 )
 
+type TransportMode int
+
+func TransportModeFromString(s string) TransportMode {
+	switch s {
+	case "quic-dgram":
+		return DGRAM
+	case "quic-stream":
+		return STREAM
+	default:
+		return ANY
+	}
+}
+
+const (
+	ANY TransportMode = iota
+	DGRAM
+	STREAM
+)
+
 func listen(
 	addr string,
 	ccAlgo cc.Algorithm,
