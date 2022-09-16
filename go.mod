@@ -37,6 +37,6 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-replace github.com/lucas-clemente/quic-go v0.28.1 => github.com/mengelbart/quic-go v0.7.1-0.20220909152858-db1304569a92
+replace github.com/lucas-clemente/quic-go v0.28.1 => github.com/mengelbart/quic-go v0.7.1-0.20220916195640-e314b18dd0a4
 
 replace github.com/pion/rtp v1.7.13 => github.com/mengelbart/rtp v1.7.14-0.20220728010821-271390af6fab
