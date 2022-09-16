@@ -139,7 +139,6 @@ func (s *GstreamerSource) Play() error {
 		panic(fmt.Errorf("ERROR: %w", err))
 		// TODO
 	})
-	go s.pipeline.Start()
 
 	var packetizer pionrtp.Packetizer
 	if !s.useGstPacketizer {
@@ -150,6 +149,7 @@ func (s *GstreamerSource) Play() error {
 		packetizer = pionrtp.NewPacketizer(s.payloadType, s.ssrc, payloader, pionrtp.NewFixedSequencer(0), 90_000)
 	}
 
+	go s.pipeline.Start()
 	for {
 		select {
 		case <-s.close:
@@ -245,6 +245,14 @@ func (s *GstreamerSource) SetTargetBitsPerSecond(bitrate uint) {
 		value = value / 1000
 	}
 	s.pipeline.SetPropertyUint("encoder", prop, value)
+}
+
+func (s *GstreamerSource) GetTargetBitsPerSecond() uint {
+	prop := "bitrate"
+	if s.codec == "vp8" || s.codec == "vp9" {
+		prop = "target-bitrate"
+	}
+	return s.pipeline.GetPropertyUint("encoder", prop)
 }
 
 type GstreamerSink struct {
