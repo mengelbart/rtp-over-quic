@@ -77,7 +77,10 @@ func (q *queue) GetDelay(ts float64) float64 {
 	}
 	pkt := q.queue.Front().Value.(rtpQueueItem)
 	d := ts - pkt.ts
-	//fmt.Printf("ts=%v, pkt.ts=%v delay=ts-pkt.ts=%v\n", ts, pkt.ts, d)
+	if d < 0 {
+		return 0
+	}
+	//log.Printf("ts=%v, pkt.ts=%v delay=ts-pkt.ts=%v\n", ts, pkt.ts, d)
 	return d
 }
 
