@@ -81,15 +81,16 @@ type SenderConfig struct {
 type Sender struct {
 	*SenderConfig
 
-	conn          quic.Connection
-	metricsTracer *RTTTracer
-	interceptor   interceptor.Interceptor
-	localFeedback *localRFC8888Generator
+	conn                quic.Connection
+	metricsTracer       *RTTTracer
+	interceptorRegistry *interceptor.Registry
+	interceptor         interceptor.Interceptor
+	localFeedback       *localRFC8888Generator
 
 	flowIDs map[uint64]struct{}
 }
 
-func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error) {
+func NewSender(r *interceptor.Registry, opts ...SenderOption) (*Sender, error) {
 	s := &Sender{
 		SenderConfig: &SenderConfig{
 			remoteAddr:        ":4242",
@@ -100,11 +101,11 @@ func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error)
 			maxMTU:            1300,
 			transportMode:     ANY,
 		},
-		conn:          nil,
-		metricsTracer: nil,
-		interceptor:   i,
-		localFeedback: nil,
-		flowIDs:       make(map[uint64]struct{}),
+		conn:                nil,
+		metricsTracer:       nil,
+		interceptorRegistry: r,
+		localFeedback:       nil,
+		flowIDs:             make(map[uint64]struct{}),
 	}
 	for _, opt := range opts {
 		if err := opt(s.SenderConfig); err != nil {
@@ -157,6 +158,12 @@ func (s *Sender) Connect(ctx context.Context) error {
 		return err
 	}
 	s.conn = conn
+
+	i, err := s.interceptorRegistry.Build("")
+	if err != nil {
+		return err
+	}
+	s.interceptor = i
 
 	rtcpReader := s.interceptor.BindRTCPReader(interceptor.RTCPReaderFunc(
 		func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {

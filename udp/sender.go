@@ -27,15 +27,16 @@ type SenderConfig struct {
 type Sender struct {
 	*SenderConfig
 
-	conn        *net.UDPConn
-	interceptor interceptor.Interceptor
+	conn                *net.UDPConn
+	interceptorRegistry *interceptor.Registry
+	interceptor         interceptor.Interceptor
 }
 
-func NewSender(i interceptor.Interceptor, opts ...SenderOption) (*Sender, error) {
+func NewSender(i *interceptor.Registry, opts ...SenderOption) (*Sender, error) {
 	s := &Sender{
-		SenderConfig: &SenderConfig{remoteAddr: ""},
-		conn:         nil,
-		interceptor:  i,
+		SenderConfig:        &SenderConfig{remoteAddr: ""},
+		conn:                nil,
+		interceptorRegistry: i,
 	}
 	for _, opt := range opts {
 		if err := opt(s.SenderConfig); err != nil {
@@ -51,6 +52,12 @@ func (s *Sender) Connect(ctx context.Context) error {
 		return err
 	}
 	s.conn = conn
+
+	i, err := s.interceptorRegistry.Build("")
+	if err != nil {
+		return err
+	}
+	s.interceptor = i
 
 	rtcpReader := s.interceptor.BindRTCPReader(interceptor.RTCPReaderFunc(
 		func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {

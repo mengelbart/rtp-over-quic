@@ -18,18 +18,14 @@ const feedbackInterval = 10 * time.Millisecond
 
 type Option func(*interceptor.Registry) error
 
-func New(options ...Option) (interceptor.Interceptor, error) {
+func New(options ...Option) (*interceptor.Registry, error) {
 	registry := interceptor.Registry{}
 	for _, option := range options {
 		if err := option(&registry); err != nil {
 			return nil, err
 		}
 	}
-	i, err := registry.Build("")
-	if err != nil {
-		return nil, err
-	}
-	return i, nil
+	return &registry, nil
 }
 
 func RegisterSenderPacketLog(rtpLogFileName, rtcpLogFileName string) Option {

@@ -149,7 +149,11 @@ func (c *receiverController) addStream(rtcpWriter interceptor.RTCPWriter) interc
 		panic("TODO") // TODO
 	}
 	// build interceptor
-	i, err := rtp.New(c.rtpOptions...)
+	r, err := rtp.New(c.rtpOptions...)
+	if err != nil {
+		panic("TODO") // TODO
+	}
+	i, err := r.Build("")
 	if err != nil {
 		panic("TODO") // TODO
 	}

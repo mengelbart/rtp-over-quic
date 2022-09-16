@@ -62,7 +62,7 @@ type senderController struct {
 	bwe BandwidthEstimator
 }
 
-func (c *senderController) setupInterceptor(ctx context.Context) (interceptor.Interceptor, error) {
+func (c *senderController) setupInterceptor(ctx context.Context) (*interceptor.Registry, error) {
 	rtpOptions := []rtp.Option{
 		rtp.RegisterSenderPacketLog(rtpDumpFile, rtcpDumpFile),
 	}
@@ -113,7 +113,7 @@ func (c *senderController) start(ctx context.Context) error {
 	return c.startMedia(sender)
 }
 
-func transportFactory(transport string) (func(context.Context, interceptor.Interceptor) (interceptor.RTPWriter, error), error) {
+func transportFactory(transport string) (func(context.Context, *interceptor.Registry) (interceptor.RTPWriter, error), error) {
 	switch transport {
 	case "quic", "quic-dgram", "quic-stream", "quic-prio":
 		return startQUICSender, nil
@@ -125,9 +125,9 @@ func transportFactory(transport string) (func(context.Context, interceptor.Inter
 	return nil, fmt.Errorf("%w: %v", errInvalidTransport, transport)
 }
 
-func startQUICSender(ctx context.Context, in interceptor.Interceptor) (interceptor.RTPWriter, error) {
+func startQUICSender(ctx context.Context, ir *interceptor.Registry) (interceptor.RTPWriter, error) {
 	sender, err := quic.NewSender(
-		in,
+		ir,
 		quic.SetTransportMode(quic.TransportModeFromString(transport)),
 		quic.RemoteAddress(addr),
 		quic.SetSenderQLOGDirName(qlogDir),
@@ -166,9 +166,9 @@ func startQUICSender(ctx context.Context, in interceptor.Interceptor) (intercept
 	return sender.NewMediaStream()
 }
 
-func startUDPSender(ctx context.Context, in interceptor.Interceptor) (interceptor.RTPWriter, error) {
+func startUDPSender(ctx context.Context, ir *interceptor.Registry) (interceptor.RTPWriter, error) {
 	sender, err := udp.NewSender(
-		in,
+		ir,
 		udp.RemoteAddress(addr),
 	)
 	if err != nil {
@@ -180,9 +180,9 @@ func startUDPSender(ctx context.Context, in interceptor.Interceptor) (intercepto
 	return sender.NewMediaStream(), nil
 }
 
-func startTCPSender(ctx context.Context, in interceptor.Interceptor) (interceptor.RTPWriter, error) {
+func startTCPSender(ctx context.Context, ir *interceptor.Registry) (interceptor.RTPWriter, error) {
 	sender, err := tcp.NewSender(
-		in,
+		ir,
 		tcp.RemoteAddress(addr),
 	)
 	if err != nil {
