@@ -78,6 +78,7 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, useGstPacke
 			gstreamer.Set("error-resilient", "default"),
 			gstreamer.Set("cpu-used", 4),
 			gstreamer.Set("deadline", 1),
+			gstreamer.Set("target-bitrate", c.targetBitrate),
 		))
 		if useGstPacketizer {
 			builder = append(builder, gstreamer.NewElement(fmt.Sprintf("rtp%vpay", c.codec), payloaderSettings...))
@@ -88,6 +89,7 @@ func NewGstreamerSource(rtpWriter interceptor.RTPWriter, src string, useGstPacke
 			gstreamer.Set("pass", 5),
 			gstreamer.Set("speed-preset", 4),
 			gstreamer.Set("tune", 4),
+			gstreamer.Set("bitrate", c.targetBitrate/1000),
 			// gstreamer.Set("key-int-max", 10),
 		))
 		if useGstPacketizer {
