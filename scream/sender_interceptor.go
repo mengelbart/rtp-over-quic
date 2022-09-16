@@ -63,9 +63,9 @@ func (f *SenderInterceptorFactory) NewInterceptor(id string) (interceptor.Interc
 		newRTPQueue:    newQueue,
 		rtpStreams:     map[uint32]*localStream{},
 		rtpStreamsMu:   sync.Mutex{},
-		minBitrate:     1_000,
-		initialBitrate: 100_000,
-		maxBitrate:     2048000000,
+		minBitrate:     100_000,
+		initialBitrate: 500_000,
+		maxBitrate:     100_000_000,
 	}
 	for _, opt := range f.opts {
 		if err := opt(s); err != nil {
@@ -206,9 +206,6 @@ func (s *SenderInterceptor) BindLocalStream(info *interceptor.StreamInfo, writer
 		newFrame:    make(chan struct{}),
 		newFeedback: make(chan struct{}),
 	}
-	s.rtpStreamsMu.Lock()
-	s.rtpStreams[info.SSRC] = localStream
-	s.rtpStreamsMu.Unlock()
 
 	// TODO: Somehow set these attributes per stream
 	priority := float64(1) // highest priority
@@ -216,11 +213,17 @@ func (s *SenderInterceptor) BindLocalStream(info *interceptor.StreamInfo, writer
 	startBitrate := s.initialBitrate
 	maxBitrate := s.maxBitrate
 
-	s.tx.RegisterNewStream(rtpQueue, info.SSRC, priority, minBitrate, startBitrate, maxBitrate)
-
-	go s.loopPacingTimer(writer, info.SSRC)
+	initialized := false
 
 	return interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
+		if !initialized {
+			s.rtpStreamsMu.Lock()
+			s.rtpStreams[info.SSRC] = localStream
+			s.rtpStreamsMu.Unlock()
+			s.tx.RegisterNewStream(rtpQueue, info.SSRC, priority, minBitrate, startBitrate, maxBitrate)
+			go s.loopPacingTimer(writer, info.SSRC)
+			initialized = true
+		}
 		now := time.Now()
 		t := s.getTimeNTP(now)
 
@@ -294,7 +297,6 @@ func (s *SenderInterceptor) loopPacingTimer(writer interceptor.RTPWriter, ssrc u
 			continue
 		}
 
-		count := 0
 		for {
 			s.m.Lock()
 			transmit := s.tx.IsOkToTransmit(s.getTimeNTP(time.Now()), ssrc)
@@ -311,13 +313,11 @@ func (s *SenderInterceptor) loopPacingTimer(writer interceptor.RTPWriter, ssrc u
 				if packet == nil {
 					break
 				}
-				// TODO: Forward attributes from above?
 				if _, err := writer.Write(&packet.rtp.Header, packet.rtp.Payload, packet.attributes); err != nil {
 					s.log.Warnf("failed sending RTP packet: %+v", err)
 				}
 				s.m.Lock()
 				s.tx.AddTransmitted(s.getTimeNTP(time.Now()), ssrc, packet.rtp.MarshalSize(), packet.rtp.SequenceNumber, packet.rtp.Marker)
-				count++
 				s.m.Unlock()
 			}
 
