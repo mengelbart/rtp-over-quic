@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/lucas-clemente/quic-go v0.28.1
 	github.com/mengelbart/gst-go v0.0.0-20220824124234-80d4e9fbbda6
-	github.com/mengelbart/scream-go v0.4.0
+	github.com/mengelbart/scream-go v0.4.1-0.20220916152424-a421761640a2
 	github.com/mengelbart/syncodec v0.0.0-20220105132658-94ec57e63a65
 	github.com/pion/interceptor v0.1.12
 	github.com/pion/logging v0.2.2

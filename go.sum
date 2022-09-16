@@ -303,8 +303,8 @@ github.com/mengelbart/quic-go v0.7.1-0.20220909152858-db1304569a92 h1:syEmUszezu
 github.com/mengelbart/quic-go v0.7.1-0.20220909152858-db1304569a92/go.mod h1:CTcNfLYJS2UuRNB+zcNlgvkjBhxX6Hm3WUxxAQx2mgE=
 github.com/mengelbart/rtp v1.7.14-0.20220728010821-271390af6fab h1:1CHgU3Xf+kSJcl6K4LtPjsVo1XSGMuS6FNkSeDNrptk=
 github.com/mengelbart/rtp v1.7.14-0.20220728010821-271390af6fab/go.mod h1:bDb5n+BFZxXx0Ea7E5qe+klMuqiBrP+w8XSjiWtCUko=
-github.com/mengelbart/scream-go v0.4.0 h1:XrjtTXDZw38yZAVRJI5c4Ysz1gjcFwj62mdOqTVQRE0=
-github.com/mengelbart/scream-go v0.4.0/go.mod h1:Yre6kUFLW62SKaIjBBZF/E93fEBqcCqn6bZyrjljd5k=
+github.com/mengelbart/scream-go v0.4.1-0.20220916152424-a421761640a2 h1:b5/z6XjU4rrnOG/yj4twB7CxsaMQz7bjh6rR1iXwiiU=
+github.com/mengelbart/scream-go v0.4.1-0.20220916152424-a421761640a2/go.mod h1:Yre6kUFLW62SKaIjBBZF/E93fEBqcCqn6bZyrjljd5k=
 github.com/mengelbart/syncodec v0.0.0-20220105132658-94ec57e63a65 h1:YesVi8KQzZ9tFu6p3NTU77xA3/8N2C11IDuk/7sV5uI=
 github.com/mengelbart/syncodec v0.0.0-20220105132658-94ec57e63a65/go.mod h1:xSNXCRAUe6VZ/3cIYLvelP33gCTh3PLVbckdgcCeV+U=
 github.com/microcosm-cc/bluemonday v1.0.1/go.mod h1:hsXNsILzKxV+sX77C5b8FSuKF00vh2OMYv+xgHpAMF4=
