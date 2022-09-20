@@ -81,7 +81,7 @@ func (e *BandwidthEstimator) RunSCReAM(ctx context.Context) error {
 			}
 			stats := bwe.GetStats()
 			fmt.Fprintf(
-				ccLogFile, "%v, %v, %v, %v, %v, %v, %v, %v, %v, %v\n",
+				ccLogFile, "%v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v\n",
 				now.UnixMilli(),
 				target,
 				stats["queueDelay"],
@@ -92,6 +92,7 @@ func (e *BandwidthEstimator) RunSCReAM(ctx context.Context) error {
 				stats["rateTransmittedStream0"],
 				stats["rateAckedStream0"],
 				stats["hiSeqAckStream0"],
+				stats["isInFastStart"],
 			)
 			if e.media != nil {
 				e.media.SetTargetBitsPerSecond(uint(target))
