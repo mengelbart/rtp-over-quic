@@ -13,7 +13,7 @@ func connectTCP(addr string, cc cc.Algorithm) (*net.TCPConn, error) {
 		Control: func(_, _ string, c syscall.RawConn) error {
 			var operr error
 			if err := c.Control(func(fd uintptr) {
-				operr = syscall.SetsockoptString(int(fd), syscall.IPPROTO_TCP, syscall.TCP_CONGESTION, cc.String())
+				operr = setCC(int(fd), cc.String())
 			}); err != nil {
 				return err
 			}
