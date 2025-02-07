@@ -1,5 +1,9 @@
 # RTP over QUIC
 
+**_This project is unmaintained. Please see
+[github.com/mengelbart/roq](https://github.com/mengelbart/roq) for a maintained
+library instead._**
+
 `rtp-over-quic` is a partial implementation of [RTP over QUIC](https://datatracker.ietf.org/doc/html/draft-engelbart-rtp-over-quic).
 
 ## Features
